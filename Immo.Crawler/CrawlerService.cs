@@ -213,7 +213,6 @@ public class CrawlerService
             var count = 0;
             foreach (var link in propertyLinks)
             {
-                if (count > 15) break; // Limit for testing/safety
                 await CrawlPageAsync(link);
                 count++;
             }
