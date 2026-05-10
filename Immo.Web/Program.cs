@@ -32,8 +32,13 @@ var app = builder.Build();
 // Automatically apply any pending migrations on startup
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<ImmoContext>();
-    db.Database.Migrate();
+    try {
+        var db = scope.ServiceProvider.GetRequiredService<ImmoContext>();
+        db.Database.Migrate();
+    }
+    catch(Exception ex) {
+        Log.Error(ex, "An error occurred while migrating the database.");
+    }
 }
 
 // Configure the HTTP request pipeline.
