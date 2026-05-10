@@ -2,6 +2,7 @@ using Immo.Data;
 using Microsoft.EntityFrameworkCore;
 
 using Serilog;
+using Serilog.Events;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,7 +12,8 @@ var dbPath = Environment.GetEnvironmentVariable("DB_PATH")
 
 // Configure Serilog
 Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Information()
+    .MinimumLevel.Warning()
+    .MinimumLevel.Override("Immo", LogEventLevel.Information)
     .Enrich.FromLogContext()
     .WriteTo.Console()
     .WriteTo.SQLite(sqliteDbPath: dbPath, tableName: "Logs")
