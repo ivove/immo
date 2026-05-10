@@ -26,7 +26,7 @@ public class LogsController : Controller
 
         if (!string.IsNullOrEmpty(source))
         {
-            query = query.Where(l => l.Properties != null && l.Properties.Contains($"\"SourceContext\":\"{source}\""));
+            query = query.Where(l => l.Properties != null && l.Properties.Contains(source));
         }
 
         var totalLogs = await query.CountAsync();
