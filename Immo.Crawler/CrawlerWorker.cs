@@ -52,8 +52,15 @@ public class CrawlerWorker : BackgroundService
                 _logger.LogError(ex, "Error occurred during crawling cycle.");
             }
 
-            _logger.LogInformation("Crawl cycle finished. Waiting 4 hours for next cycle...");
-            await Task.Delay(TimeSpan.FromHours(4), stoppingToken);
+            using (var scope = _scopeFactory.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<ImmoContext>();
+                var settings = await context.AppSettings.FirstOrDefaultAsync(stoppingToken);
+                var waitHours = settings?.CrawlIntervalHours ?? 4;
+
+                _logger.LogInformation("Crawl cycle finished. Waiting {Hours} hours for next cycle...", waitHours);
+                await Task.Delay(TimeSpan.FromHours(waitHours), stoppingToken);
+            }
         }
 
         _logger.LogInformation("Crawler Worker stopping...");

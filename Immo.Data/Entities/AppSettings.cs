@@ -10,6 +10,9 @@ public class AppSettings
     /// <summary>Number of days before a crawled page is eligible for re-crawling.</summary>
     public int RecrawlAfterDays { get; set; } = 3;
 
+    /// <summary>How many hours the crawler worker should wait between complete cycles.</summary>
+    public int CrawlIntervalHours { get; set; } = 4;
+
     /// <summary>
     /// Comma-separated list of words/phrases that indicate a property is sold.
     /// E.g. "verkocht,sold"

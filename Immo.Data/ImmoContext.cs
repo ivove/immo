@@ -49,6 +49,7 @@ public class ImmoContext : DbContext
         {
             Id = 1,
             RecrawlAfterDays = 3,
+            CrawlIntervalHours = 4,
             SoldKeywords = "verkocht,sold",
             UnderOptionKeywords = "onder optie,optie"
         });

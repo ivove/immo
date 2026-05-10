@@ -43,6 +43,21 @@
 
                         <div class="mb-5">
                             <h5 class="fw-bold mb-3 text-dark">
+                                <i class="bi bi-arrow-repeat text-success me-2"></i> Cycle Frequency
+                            </h5>
+                            <div class="bg-light p-4 rounded-4">
+                                <label asp-for="CrawlIntervalHours" class="form-label fw-semibold">Cycle Wait Time (Hours)</label>
+                                <div class="input-group">
+                                    <input asp-for="CrawlIntervalHours" type="number" class="form-control form-control-lg border-0 shadow-none" min="1" max="168" />
+                                    <span class="input-group-text bg-white border-0 text-muted">hours</span>
+                                </div>
+                                <div class="form-text mt-2">How long the crawler should wait after finishing a complete cycle before starting the next one.</div>
+                                <span asp-validation-for="CrawlIntervalHours" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="mb-5">
+                            <h5 class="fw-bold mb-3 text-dark">
                                 <i class="bi bi-tag-fill text-danger me-2"></i> Sold Keywords
                             </h5>
                             <div class="bg-light p-4 rounded-4">

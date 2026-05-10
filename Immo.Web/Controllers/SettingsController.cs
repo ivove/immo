@@ -38,6 +38,7 @@ public class SettingsController : Controller
             else
             {
                 existing.RecrawlAfterDays = settings.RecrawlAfterDays;
+                existing.CrawlIntervalHours = settings.CrawlIntervalHours;
                 existing.SoldKeywords = settings.SoldKeywords;
                 existing.UnderOptionKeywords = settings.UnderOptionKeywords;
                 _context.Update(existing);
