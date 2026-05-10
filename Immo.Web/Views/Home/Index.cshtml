@@ -18,7 +18,7 @@
 </div>
 
 <div class="container mb-5">
-    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+    <div class="card border-0 shadow-sm rounded-4">
         <div class="card-body p-4">
             <form method="get" action="@Url.Action("Index")" class="row g-3 align-items-end">
                 <div class="col-md-3 col-lg-2">
@@ -36,16 +36,46 @@
                     </div>
                 </div>
                 <div class="col-md-4 col-lg-2">
-                    <label class="form-label fw-bold small text-muted text-uppercase" title="Hold Ctrl/Cmd to select multiple">Postal Codes</label>
-                    <select name="zipCodes" class="form-select" multiple size="2">
-                        @foreach(dynamic loc in ViewBag.AvailableZipCodes)
-                        {
-                            var selectedZips = ViewBag.SelectedZipCodes as List<string>;
-                            bool isSelected = selectedZips != null && selectedZips.Contains((string)loc.ZipCode);
-                            string display = string.IsNullOrEmpty((string)loc.City) ? loc.ZipCode : $"{loc.ZipCode} - {loc.City}";
-                            <option value="@loc.ZipCode" selected="@isSelected">@display</option>
-                        }
-                    </select>
+                    <label class="form-label fw-bold small text-muted text-uppercase">Postal Codes</label>
+                    <div class="dropdown zip-selector-container" id="zipCodeDropdown">
+                        <div class="zip-selector-field" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+                            <span class="text-muted small placeholder-text" id="zipPlaceholder">All areas</span>
+                            <div id="selectedZipsContainer" class="d-flex flex-wrap gap-1"></div>
+                        </div>
+                        <div class="dropdown-menu zip-dropdown-menu">
+                            <div class="zip-search-wrapper">
+                                <input type="text" class="form-control form-control-sm border-0 bg-light" id="zipSearch" placeholder="Search postal code or city..." autocomplete="off">
+                            </div>
+                            <div id="zipOptions">
+                                @foreach(dynamic loc in ViewBag.AvailableZipCodes)
+                                {
+                                    var selectedZips = ViewBag.SelectedZipCodes as List<string>;
+                                    bool isSelected = selectedZips != null && selectedZips.Contains((string)loc.ZipCode);
+                                    <div class="zip-option-item d-flex align-items-center justify-content-between @(isSelected ? "selected" : "")" 
+                                         data-zip="@loc.ZipCode" 
+                                         data-city="@loc.City">
+                                        <div>
+                                            <span class="fw-bold me-2">@loc.ZipCode</span>
+                                            <span class="text-muted small">@loc.City</span>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input zip-cb" type="checkbox" value="@loc.ZipCode" @(isSelected ? "checked" : "")>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        <!-- Hidden inputs for form submission -->
+                        <div id="hiddenZipInputs">
+                            @if (ViewBag.SelectedZipCodes != null)
+                            {
+                                foreach (var zip in (List<string>)ViewBag.SelectedZipCodes)
+                                {
+                                    <input type="hidden" name="zipCodes" value="@zip">
+                                }
+                            }
+                        </div>
+                    </div>
                 </div>
                 <div class="col-md-2 col-lg-1">
                     <label class="form-label fw-bold small text-muted text-uppercase">Beds</label>
@@ -243,3 +273,100 @@
     .epc-e { background-color: #ff9800; } /* Orange */
     .epc-f { background-color: #d32f2f; } /* Red */
 </style>
+
+@section Scripts {
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const dropdown = document.getElementById('zipCodeDropdown');
+        const searchInput = document.getElementById('zipSearch');
+        const optionsContainer = document.getElementById('zipOptions');
+        const selectedContainer = document.getElementById('selectedZipsContainer');
+        const placeholder = document.getElementById('zipPlaceholder');
+        const hiddenInputsContainer = document.getElementById('hiddenZipInputs');
+        const optionItems = document.querySelectorAll('.zip-option-item');
+
+        function updateDisplay() {
+            const selectedItems = document.querySelectorAll('.zip-option-item.selected');
+            selectedContainer.innerHTML = '';
+            hiddenInputsContainer.innerHTML = '';
+
+            if (selectedItems.length > 0) {
+                placeholder.classList.add('d-none');
+                selectedItems.forEach(item => {
+                    const zip = item.dataset.zip;
+                    
+                    // Create tag
+                    const tag = document.createElement('span');
+                    tag.className = 'zip-tag animate-slide-up';
+                    tag.innerHTML = `${zip} <span class="remove-zip" data-zip="${zip}">&times;</span>`;
+                    selectedContainer.appendChild(tag);
+
+                    // Create hidden input
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'zipCodes';
+                    input.value = zip;
+                    hiddenInputsContainer.appendChild(input);
+                });
+            } else {
+                placeholder.classList.remove('d-none');
+            }
+        }
+
+        // Initialize display
+        updateDisplay();
+
+        // Handle item click
+        optionItems.forEach(item => {
+            item.addEventListener('click', function (e) {
+                e.stopPropagation();
+                const cb = this.querySelector('.zip-cb');
+                this.classList.toggle('selected');
+                cb.checked = !cb.checked;
+                updateDisplay();
+            });
+
+            // Prevent checkbox click from double-triggering
+            item.querySelector('.zip-cb').addEventListener('click', function (e) {
+                e.stopPropagation();
+                const parent = this.closest('.zip-option-item');
+                parent.classList.toggle('selected');
+                updateDisplay();
+            });
+        });
+
+        // Handle tag removal
+        selectedContainer.addEventListener('click', function (e) {
+            if (e.target.classList.contains('remove-zip')) {
+                e.stopPropagation();
+                const zip = e.target.dataset.zip;
+                const item = document.querySelector(`.zip-option-item[data-zip="${zip}"]`);
+                if (item) {
+                    item.classList.remove('selected');
+                    item.querySelector('.zip-cb').checked = false;
+                    updateDisplay();
+                }
+            }
+        });
+
+        // Search filtering
+        searchInput.addEventListener('input', function () {
+            const query = this.value.toLowerCase();
+            optionItems.forEach(item => {
+                const zip = item.dataset.zip.toLowerCase();
+                const city = item.dataset.city.toLowerCase();
+                if (zip.includes(query) || city.includes(query)) {
+                    item.classList.remove('d-none');
+                } else {
+                    item.classList.add('d-none');
+                }
+            });
+        });
+
+        // Focus search on dropdown open
+        dropdown.addEventListener('shown.bs.dropdown', function () {
+            searchInput.focus();
+        });
+    });
+</script>
+}
