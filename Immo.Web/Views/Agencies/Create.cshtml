@@ -1,0 +1,46 @@
+@model Immo.Data.Entities.Agency
+
+@{
+    ViewData["Title"] = "Add Agency";
+}
+
+<div class="container py-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a asp-action="Index">Agencies</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Add New</li>
+        </ol>
+    </nav>
+
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-4">
+                    <h2 class="fw-bold mb-4">Add New Agency</h2>
+                    
+                    <form asp-action="Create">
+                        <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+                        
+                        <div class="form-floating mb-4">
+                            <input asp-for="AgencyDomain" class="form-control" placeholder="https://example.com" required />
+                            <label asp-for="AgencyDomain">Agency Domain / Base URL</label>
+                            <span asp-validation-for="AgencyDomain" class="text-danger"></span>
+                            <div class="form-text mt-2">
+                                Enter the full base URL including protocol (e.g., https://www.immoweb.be)
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">Create Agency</button>
+                            <a asp-action="Index" class="btn btn-link text-muted">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}

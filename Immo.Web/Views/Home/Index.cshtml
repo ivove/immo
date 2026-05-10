@@ -1,0 +1,245 @@
+@model IEnumerable<Immo.Data.Entities.Property>
+
+@{
+    ViewData["Title"] = "Real Estate Explorer";
+}
+
+<div class="hero-section text-center py-5 mb-5 bg-dark text-white rounded-4 shadow-lg position-relative overflow-hidden">
+    <div class="hero-bg-glow"></div>
+    <div class="container position-relative z-index-1">
+        <h1 class="display-4 fw-bold mb-3 animate-slide-up">Discover Your Next Home</h1>
+        <p class="lead mb-4 text-light opacity-75 animate-slide-up delay-1">Explore our curated selection of premium real estate properties.</p>
+        <div class="d-flex justify-content-center animate-slide-up delay-2">
+            <span class="badge bg-primary text-white p-3 fs-5 rounded-pill shadow-sm">
+                <i class="bi bi-house-door me-2"></i> @Model.Count() Properties Available
+            </span>
+        </div>
+    </div>
+</div>
+
+<div class="container mb-5">
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="card-body p-4">
+            <form method="get" action="@Url.Action("Index")" class="row g-3 align-items-end">
+                <div class="col-md-3 col-lg-2">
+                    <label class="form-label fw-bold small text-muted text-uppercase">Min Price</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0">€</span>
+                        <input type="number" name="minPrice" value="@ViewBag.MinPrice" class="form-control border-start-0" placeholder="0">
+                    </div>
+                </div>
+                <div class="col-md-3 col-lg-2">
+                    <label class="form-label fw-bold small text-muted text-uppercase">Max Price</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0">€</span>
+                        <input type="number" name="maxPrice" value="@ViewBag.MaxPrice" class="form-control border-start-0" placeholder="Any">
+                    </div>
+                </div>
+                <div class="col-md-4 col-lg-2">
+                    <label class="form-label fw-bold small text-muted text-uppercase" title="Hold Ctrl/Cmd to select multiple">Postal Codes</label>
+                    <select name="zipCodes" class="form-select" multiple size="2">
+                        @foreach(dynamic loc in ViewBag.AvailableZipCodes)
+                        {
+                            var selectedZips = ViewBag.SelectedZipCodes as List<string>;
+                            bool isSelected = selectedZips != null && selectedZips.Contains((string)loc.ZipCode);
+                            string display = string.IsNullOrEmpty((string)loc.City) ? loc.ZipCode : $"{loc.ZipCode} - {loc.City}";
+                            <option value="@loc.ZipCode" selected="@isSelected">@display</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2 col-lg-1">
+                    <label class="form-label fw-bold small text-muted text-uppercase">Beds</label>
+                    <select name="minBedrooms" class="form-select">
+                        <option value="">Any</option>
+                        @for (int i = 1; i <= 5; i++) {
+                            <option value="@i" selected="@(ViewBag.MinBedrooms == i)">@i+</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3 col-lg-2">
+                    <label class="form-label fw-bold small text-muted text-uppercase">Min Living Area</label>
+                    <div class="input-group">
+                        <input type="number" name="minLivingArea" value="@ViewBag.MinLivingArea" class="form-control border-end-0" placeholder="0">
+                        <span class="input-group-text bg-white border-start-0">m²</span>
+                    </div>
+                </div>
+                <div class="col-md-3 col-lg-2">
+                    <label class="form-label fw-bold small text-muted text-uppercase">Min Plot Area</label>
+                    <div class="input-group">
+                        <input type="number" name="minPlotArea" value="@ViewBag.MinPlotArea" class="form-control border-end-0" placeholder="0">
+                        <span class="input-group-text bg-white border-start-0">m²</span>
+                    </div>
+                </div>
+                <div class="col-md-2 col-lg-1">
+                    <label class="form-label fw-bold small text-muted text-uppercase">Max EPC</label>
+                    <select name="maxEpc" class="form-select">
+                        <option value="">Any</option>
+                        @foreach (var grade in new[] { "A", "B", "C", "D", "E", "F" }) {
+                            <option value="@grade" selected="@(ViewBag.MaxEpc == grade)">@grade</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3 col-lg-2">
+                    <label class="form-label fw-bold small text-muted text-uppercase">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="all" selected="@(ViewBag.Status == "all")">All</option>
+                        <option value="available" selected="@(ViewBag.Status == "available")">Available</option>
+                        <option value="sold" selected="@(ViewBag.Status == "sold")">Sold</option>
+                        <option value="under_option" selected="@(ViewBag.Status == "under_option")">Under Option</option>
+                    </select>
+                </div>
+                <div class="col-md-12 col-lg-2">
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary w-100 fw-bold">
+                            <i class="bi bi-filter me-2"></i> Filter
+                        </button>
+                        <a href="@Url.Action("Index")" class="btn btn-outline-secondary px-3" title="Clear Filters">
+                            <i class="bi bi-x-lg"></i>
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-5">
+        @if (!Model.Any())
+        {
+            <div class="col-12 text-center py-5">
+                <div class="empty-state p-5 bg-light rounded-4 shadow-sm border-0">
+                    <i class="bi bi-search display-1 text-muted mb-4 opacity-50"></i>
+                    <h3 class="fw-bold">No properties found</h3>
+                    <p class="text-muted">The crawler hasn't fetched any properties yet. Run the crawler and parser projects to populate the database.</p>
+                </div>
+            </div>
+        }
+
+        @{
+            string GetEpcClass(string? epc) {
+                if (string.IsNullOrEmpty(epc)) return "bg-light text-secondary";
+                var s = epc.ToUpper().Trim();
+                if (s.StartsWith("A")) return "epc-a text-white";
+                if (s.StartsWith("B")) return "epc-b text-white";
+                if (s.StartsWith("C")) return "epc-c text-dark";
+                if (s.StartsWith("D")) return "epc-d text-dark";
+                if (s.StartsWith("E")) return "epc-e text-white";
+                if (s.StartsWith("F") || s.StartsWith("G")) return "epc-f text-white";
+                return "bg-light text-secondary";
+            }
+        }
+
+        @foreach (var property in Model)
+        {
+            <div class="col">
+                <div class="card h-100 property-card border-0 rounded-4 shadow-sm overflow-hidden bg-white">
+                    <div class="position-relative property-img-wrapper">
+                        @if (!string.IsNullOrEmpty(property.ImageUrl))
+                        {
+                            <img src="@property.ImageUrl" class="card-img-top property-img" alt="@property.Title">
+                        }
+                        else
+                        {
+                            <div class="card-img-top bg-secondary bg-opacity-10 d-flex align-items-center justify-content-center property-img-placeholder">
+                                <i class="bi bi-image text-muted opacity-25" style="font-size: 4rem;"></i>
+                            </div>
+                        }
+                        <div class="position-absolute top-0 end-0 p-3 d-flex flex-column gap-2 align-items-end">
+                            @if (property.Sold)
+                            {
+                                <span class="badge bg-danger text-white rounded-pill px-3 py-2 fw-bold shadow-sm">
+                                    SOLD
+                                </span>
+                            }
+                            @if (property.UnderOption)
+                            {
+                                <span class="badge bg-warning text-dark rounded-pill px-3 py-2 fw-bold shadow-sm">
+                                    UNDER OPTION
+                                </span>
+                            }
+                            <span class="badge bg-dark bg-opacity-75 text-white rounded-pill px-3 py-2 fw-semibold backdrop-blur">
+                                @property.SourceDomain
+                            </span>
+                        </div>
+                        @if (property.Price.HasValue)
+                        {
+                            <div class="position-absolute bottom-0 start-0 p-3 w-100 property-price-gradient">
+                                <h4 class="mb-0 text-white fw-bold">€ @property.Price.Value.ToString("N0")</h4>
+                            </div>
+                        }
+                    </div>
+                    <div class="card-body p-4 d-flex flex-column">
+                        <h5 class="card-title fw-bold text-dark mb-3 text-truncate-2">@property.Title</h5>
+                        
+                        <div class="d-flex align-items-center text-muted mb-3 small fw-medium">
+                            <i class="bi bi-geo-alt-fill text-primary me-2"></i>
+                            @(string.IsNullOrEmpty(property.City) ? "Location Unknown" : $"{property.ZipCode} {property.City}")
+                        </div>
+
+                        <div class="row g-2 mb-4 mt-auto">
+                            @if (property.Bedrooms.HasValue)
+                            {
+                                <div class="col-auto">
+                                    <div class="bg-light rounded-3 px-3 py-2 d-flex align-items-center" title="Bedrooms">
+                                        <i class="bi bi-door-closed text-secondary me-2"></i>
+                                        <span class="fw-semibold">@property.Bedrooms</span>
+                                    </div>
+                                </div>
+                            }
+                            @if (property.LivingArea.HasValue)
+                            {
+                                <div class="col-auto">
+                                    <div class="bg-light rounded-3 px-3 py-2 d-flex align-items-center" title="Living Area">
+                                        <i class="bi bi-arrows-fullscreen text-secondary me-2"></i>
+                                        <span class="fw-semibold">@property.LivingArea m²</span>
+                                    </div>
+                                </div>
+                            }
+                            @if (property.PlotArea.HasValue)
+                            {
+                                <div class="col-auto">
+                                    <div class="bg-light rounded-3 px-3 py-2 d-flex align-items-center" title="Plot Area">
+                                        <i class="bi bi-tree text-secondary me-2"></i>
+                                        <span class="fw-semibold">@property.PlotArea m²</span>
+                                    </div>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(property.EpcScore))
+                            {
+                                <div class="col-auto">
+                                    <div class="rounded-3 px-3 py-2 d-flex align-items-center shadow-sm @GetEpcClass(property.EpcScore)" title="EPC Rating: @property.EpcScore">
+                                        <i class="bi bi-lightning-charge me-2"></i>
+                                        <span class="fw-bold">EPC @property.EpcScore</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        
+                        <a href="@property.SourceUrl" target="_blank" class="btn btn-outline-primary rounded-pill w-100 fw-semibold property-btn mt-auto">
+                            View Details <i class="bi bi-arrow-right ms-2 transition-transform"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    /* Adding some specific inline styles for things not easily done in site.css */
+    .text-truncate-2 {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    /* EPC Rating Colors */
+    .epc-a { background-color: #2e7d32; } /* Dark Green */
+    .epc-b { background-color: #4caf50; } /* Green */
+    .epc-c { background-color: #cddc39; } /* Lime/Yellow-Green */
+    .epc-d { background-color: #ffeb3b; } /* Yellow */
+    .epc-e { background-color: #ff9800; } /* Orange */
+    .epc-f { background-color: #d32f2f; } /* Red */
+</style>

@@ -1,0 +1,92 @@
+@model Immo.Data.Entities.Agency
+
+@{
+    ViewData["Title"] = "Edit Agency";
+}
+
+<div class="container py-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a asp-action="Index">Agencies</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Edit Agency</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <div class="col-lg-5 mb-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body p-4">
+                    <h2 class="fw-bold mb-4">Agency Details</h2>
+                    
+                    <form asp-action="Edit">
+                        <input type="hidden" asp-for="Id" />
+                        <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+                        
+                        <div class="form-floating mb-4">
+                            <input asp-for="AgencyDomain" class="form-control" placeholder="https://example.com" required />
+                            <label asp-for="AgencyDomain">Agency Domain / Base URL</label>
+                            <span asp-validation-for="AgencyDomain" class="text-danger"></span>
+                        </div>
+
+                        <div class="d-grid gap-2 mb-2">
+                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                        </div>
+                        <div class="d-grid gap-2">
+                            <a asp-action="EditParserConfig" asp-route-agencyId="@Model.Id" class="btn btn-outline-info">
+                                <i class="bi bi-gear"></i> Configure Parser
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2 class="fw-bold mb-0">Crawling Rules</h2>
+                        <a asp-action="AddCheck" asp-route-agencyId="@Model.Id" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-plus-lg"></i> Add Rule
+                        </a>
+                    </div>
+
+                    @if (!Model.AgencyListingChecks.Any())
+                    {
+                        <div class="text-center py-4 bg-light rounded-3 border border-dashed">
+                            <p class="text-muted mb-0">No crawling rules defined for this agency yet.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush border-top">
+                            @foreach (var check in Model.AgencyListingChecks)
+                            {
+                                <div class="list-group-item px-0 py-3 d-flex justify-content-between align-items-start">
+                                    <div class="ms-2 me-auto">
+                                        <div class="fw-bold text-dark mb-2">Rule ID: @check.Id</div>
+                                        <div class="d-flex flex-wrap gap-2">
+                                            @foreach (var pos in check.UrlPosibilities)
+                                            {
+                                                <span class="badge bg-light text-dark border">@pos</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <form asp-action="DeleteCheck" asp-route-id="@check.Id" method="post" class="ms-3" onsubmit="return confirm('Remove this rule?');">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                            <i class="bi bi-x"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}

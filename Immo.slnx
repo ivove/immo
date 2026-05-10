@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Immo.Crawler/Immo.Crawler.csproj" />
+  <Project Path="Immo.Data/Immo.Data.csproj" />
+  <Project Path="Immo.Parser/Immo.Parser.csproj" />
+  <Project Path="Immo.Web/Immo.Web.csproj" />
+</Solution>

@@ -1,0 +1,104 @@
+@model IEnumerable<Immo.Data.Entities.LogEntry>
+
+@{
+    ViewData["Title"] = "System Logs";
+}
+
+<div class="container py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 fw-bold mb-0"><i class="bi bi-journal-text me-2 text-primary"></i> System Logs</h1>
+        
+        <form method="get" class="d-flex gap-2">
+            <input type="text" name="source" value="@ViewBag.CurrentSource" class="form-control" placeholder="Filter by source..." />
+            <select name="level" class="form-select" onchange="this.form.submit()">
+                <option value="">All Levels</option>
+                <option value="Information" selected="@(ViewBag.CurrentLevel == "Information")">Information</option>
+                <option value="Warning" selected="@(ViewBag.CurrentLevel == "Warning")">Warning</option>
+                <option value="Error" selected="@(ViewBag.CurrentLevel == "Error")">Error</option>
+                <option value="Fatal" selected="@(ViewBag.CurrentLevel == "Fatal")">Fatal</option>
+            </select>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i></button>
+        </form>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover table-borderless align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="py-3 px-4">ID</th>
+                        <th class="py-3 px-4">Timestamp</th>
+                        <th class="py-3 px-4">Level</th>
+                        <th class="py-3 px-4">Source</th>
+                        <th class="py-3 px-4">Message</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!Model.Any())
+                    {
+                        <tr>
+                            <td colspan="5" class="text-center py-5 text-muted">
+                                <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                                No logs found.
+                            </td>
+                        </tr>
+                    }
+                    @foreach (var log in Model)
+                    {
+                        var badgeClass = log.Level switch
+                        {
+                            "Information" => "bg-info text-dark",
+                            "Warning" => "bg-warning text-dark",
+                            "Error" => "bg-danger",
+                            "Fatal" => "bg-dark text-white",
+                            _ => "bg-secondary"
+                        };
+
+                        <tr>
+                            <td class="px-4 text-muted small">#@log.Id</td>
+                            <td class="px-4 text-nowrap">@log.Timestamp</td>
+                            <td class="px-4">
+                                <span class="badge @badgeClass rounded-pill">@log.Level</span>
+                            </td>
+                            <td class="px-4 text-truncate text-muted small" style="max-width: 250px;" title="@log.SourceContext">
+                                @log.SourceContext
+                            </td>
+                            <td class="px-4">
+                                <div class="text-break" style="max-width: 600px;">
+                                    @log.RenderedMessage
+                                    
+                                    @if (!string.IsNullOrEmpty(log.Exception))
+                                    {
+                                        <button class="btn btn-sm btn-outline-danger ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#exception-@log.Id">
+                                            <i class="bi bi-bug"></i> Details
+                                        </button>
+                                        <div class="collapse mt-2" id="exception-@log.Id">
+                                            <pre class="bg-light p-3 rounded-3 text-danger small border border-danger border-opacity-25"><code>@log.Exception</code></pre>
+                                        </div>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @if (ViewBag.TotalPages > 1)
+    {
+        <nav class="mt-4">
+            <ul class="pagination justify-content-center">
+                <li class="page-item @(ViewBag.CurrentPage == 1 ? "disabled" : "")">
+                    <a class="page-link" href="?level=@ViewBag.CurrentLevel&page=@(ViewBag.CurrentPage - 1)">Previous</a>
+                </li>
+                <li class="page-item disabled">
+                    <span class="page-link">Page @ViewBag.CurrentPage of @ViewBag.TotalPages</span>
+                </li>
+                <li class="page-item @(ViewBag.CurrentPage == ViewBag.TotalPages ? "disabled" : "")">
+                    <a class="page-link" href="?level=@ViewBag.CurrentLevel&page=@(ViewBag.CurrentPage + 1)">Next</a>
+                </li>
+            </ul>
+        </nav>
+    }
+</div>

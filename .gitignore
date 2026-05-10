@@ -1,0 +1,36 @@
+# IDE folders
+.vscode/
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build outputs
+bin/
+obj/
+[Oo]ut/
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Database and data
+*.db
+*.db-shm
+*.db-wal
+immo-data/
+
+# Environment and secrets
+.env
+appsettings.json
+!appsettings.Development.json
+
+# Docker
+.dockerignore
+
+# OS files
+.DS_Store
+Thumbs.db

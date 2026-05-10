@@ -1,0 +1,37 @@
+services:
+  immo-web:
+    build:
+      context: .
+      dockerfile: Immo.Web/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_PATH=/app/data/immo.db
+      - ASPNETCORE_HTTP_PORTS=8080
+    volumes:
+      - immo-data:/app/data
+
+  immo-crawler:
+    build:
+      context: .
+      dockerfile: Immo.Crawler/Dockerfile
+    environment:
+      - DB_PATH=/app/data/immo.db
+    volumes:
+      - immo-data:/app/data
+    depends_on:
+      - immo-web
+
+  immo-parser:
+    build:
+      context: .
+      dockerfile: Immo.Parser/Dockerfile
+    environment:
+      - DB_PATH=/app/data/immo.db
+    volumes:
+      - immo-data:/app/data
+    depends_on:
+      - immo-web
+
+volumes:
+  immo-data:

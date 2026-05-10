@@ -1,0 +1,107 @@
+using System.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Immo.Web.Models;
+using Immo.Data;
+
+namespace Immo.Web.Controllers;
+
+public class HomeController : Controller
+{
+    private readonly ImmoContext _context;
+
+    public HomeController(ImmoContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<IActionResult> Index(
+        decimal? minPrice, decimal? maxPrice, 
+        List<string>? zipCodes, 
+        int? minBedrooms, 
+        double? minLivingArea, 
+        double? minPlotArea,
+        string? maxEpc,
+        string? status = "available")
+    {
+        var query = _context.Properties.AsQueryable();
+
+        // Status Filtering
+        if (status == "available")
+        {
+            query = query.Where(p => !p.Sold && !p.UnderOption);
+        }
+        else if (status == "sold")
+        {
+            query = query.Where(p => p.Sold);
+        }
+        else if (status == "under_option")
+        {
+            query = query.Where(p => p.UnderOption);
+        }
+
+        if (minPrice.HasValue) query = query.Where(p => p.Price >= minPrice.Value);
+        if (maxPrice.HasValue) query = query.Where(p => p.Price <= maxPrice.Value);
+        
+        if (zipCodes != null && zipCodes.Any())
+        {
+            query = query.Where(p => p.ZipCode != null && zipCodes.Contains(p.ZipCode));
+        }
+
+        if (minBedrooms.HasValue) query = query.Where(p => p.Bedrooms >= minBedrooms.Value);
+        if (minLivingArea.HasValue) query = query.Where(p => p.LivingArea >= minLivingArea.Value);
+        if (minPlotArea.HasValue) query = query.Where(p => p.PlotArea >= minPlotArea.Value);
+
+        if (!string.IsNullOrEmpty(maxEpc))
+        {
+            var epcGrades = new List<string> { "A", "B", "C", "D", "E", "F", "G" };
+            var maxIndex = epcGrades.IndexOf(maxEpc.ToUpper());
+            if (maxIndex != -1)
+            {
+                var allowedGrades = epcGrades.Take(maxIndex + 1).ToList();
+                query = query.Where(p => p.EpcScore != null && allowedGrades.Contains(p.EpcScore.Substring(0, 1).ToUpper()));
+            }
+        }
+
+        var properties = await query.OrderByDescending(p => p.Id).ToListAsync();
+        
+        var rawLocations = await _context.Properties
+            .Where(p => !string.IsNullOrEmpty(p.ZipCode))
+            .Select(p => new { p.ZipCode, p.City })
+            .ToListAsync();
+
+        var availableZipCodes = rawLocations
+            .GroupBy(p => p.ZipCode)
+            .Select(g => new 
+            { 
+                ZipCode = g.Key, 
+                City = g.FirstOrDefault(x => !string.IsNullOrEmpty(x.City))?.City ?? "" 
+            })
+            .OrderBy(l => l.ZipCode)
+            .ToList();
+
+        // Pass filter values back to the view
+        ViewBag.MinPrice = minPrice;
+        ViewBag.MaxPrice = maxPrice;
+        ViewBag.SelectedZipCodes = zipCodes ?? new List<string>();
+        ViewBag.AvailableZipCodes = availableZipCodes;
+        ViewBag.MinBedrooms = minBedrooms;
+        ViewBag.MinLivingArea = minLivingArea;
+        ViewBag.MinPlotArea = minPlotArea;
+        ViewBag.MaxEpc = maxEpc;
+        ViewBag.Status = status;
+
+        return View(properties);
+    }
+
+    public IActionResult Privacy()
+    {
+        return View();
+    }
+
+    [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
+    public IActionResult Error()
+    {
+        return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+    }
+}
