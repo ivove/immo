@@ -308,6 +308,21 @@ public class AgenciesController : Controller
         return RedirectToAction(nameof(Index));
     }
 
+    // POST: Agencies/RequestCrawl/5
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RequestCrawl(int id)
+    {
+        var agency = await _context.Agencies.FindAsync(id);
+        if (agency == null) return NotFound();
+
+        agency.CrawlRequestedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        TempData["SuccessMessage"] = $"Crawl requested for \"{agency.AgencyDomain}\". The crawler will pick it up shortly.";
+        return RedirectToAction(nameof(Index));
+    }
+
     private bool AgencyExists(int id)
     {
         return _context.Agencies.Any(e => e.Id == id);

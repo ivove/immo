@@ -21,29 +21,70 @@ public class CrawlerWorker : BackgroundService
     {
         _logger.LogInformation("Crawler Worker starting...");
 
+        // Track when the last full cycle ran so we can schedule the next one
+        var nextFullCycleAt = DateTime.UtcNow;
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
+                // --- On-demand crawl requests ---
                 using (var scope = _scopeFactory.CreateScope())
                 {
                     var context = scope.ServiceProvider.GetRequiredService<ImmoContext>();
                     var crawler = scope.ServiceProvider.GetRequiredService<CrawlerService>();
 
-                    var agencies = await context.Agencies.ToListAsync(stoppingToken);
-                    _logger.LogInformation("Starting crawl for {Count} agencies...", agencies.Count);
+                    var pendingAgencies = await context.Agencies
+                        .Where(a => a.CrawlRequestedAt != null)
+                        .ToListAsync(stoppingToken);
 
-                    foreach (var agency in agencies)
+                    foreach (var agency in pendingAgencies)
                     {
                         if (stoppingToken.IsCancellationRequested) break;
-                        
-                        _logger.LogInformation("Processing agency: {Domain}", agency.AgencyDomain);
+
+                        _logger.LogInformation("On-demand crawl requested for agency: {Domain}", agency.AgencyDomain);
+
+                        // Clear the request flag immediately so it isn't picked up again
+                        agency.CrawlRequestedAt = null;
+                        await context.SaveChangesAsync(stoppingToken);
+
                         await crawler.CrawlListingPageAsync(agency.AgencyDomain);
                     }
+                }
 
-                    if (!stoppingToken.IsCancellationRequested)
+                // --- Regular scheduled full cycle ---
+                if (DateTime.UtcNow >= nextFullCycleAt)
+                {
+                    using (var scope = _scopeFactory.CreateScope())
                     {
-                        await crawler.CheckUnseenPagesAsync();
+                        var context = scope.ServiceProvider.GetRequiredService<ImmoContext>();
+                        var crawler = scope.ServiceProvider.GetRequiredService<CrawlerService>();
+
+                        var agencies = await context.Agencies.ToListAsync(stoppingToken);
+                        _logger.LogInformation("Starting scheduled crawl for {Count} agencies...", agencies.Count);
+
+                        foreach (var agency in agencies)
+                        {
+                            if (stoppingToken.IsCancellationRequested) break;
+
+                            _logger.LogInformation("Processing agency: {Domain}", agency.AgencyDomain);
+                            await crawler.CrawlListingPageAsync(agency.AgencyDomain);
+                        }
+
+                        if (!stoppingToken.IsCancellationRequested)
+                        {
+                            await crawler.CheckUnseenPagesAsync();
+                        }
+                    }
+
+                    using (var scope = _scopeFactory.CreateScope())
+                    {
+                        var context = scope.ServiceProvider.GetRequiredService<ImmoContext>();
+                        var settings = await context.AppSettings.FirstOrDefaultAsync(stoppingToken);
+                        var waitHours = settings?.CrawlIntervalHours ?? 4;
+
+                        nextFullCycleAt = DateTime.UtcNow.AddHours(waitHours);
+                        _logger.LogInformation("Crawl cycle finished. Next scheduled cycle at {NextCycle}.", nextFullCycleAt);
                     }
                 }
             }
@@ -52,15 +93,8 @@ public class CrawlerWorker : BackgroundService
                 _logger.LogError(ex, "Error occurred during crawling cycle.");
             }
 
-            using (var scope = _scopeFactory.CreateScope())
-            {
-                var context = scope.ServiceProvider.GetRequiredService<ImmoContext>();
-                var settings = await context.AppSettings.FirstOrDefaultAsync(stoppingToken);
-                var waitHours = settings?.CrawlIntervalHours ?? 4;
-
-                _logger.LogInformation("Crawl cycle finished. Waiting {Hours} hours for next cycle...", waitHours);
-                await Task.Delay(TimeSpan.FromHours(waitHours), stoppingToken);
-            }
+            // Poll every minute for on-demand requests
+            await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
         }
 
         _logger.LogInformation("Crawler Worker stopping...");

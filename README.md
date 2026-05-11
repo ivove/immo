@@ -4,10 +4,11 @@ A production-ready, containerized real estate crawler and parser solution built 
 
 ## 🚀 Features
 
-- **Automated Crawling**: Periodic background workers crawl configured agency websites.
+- **Automated Crawling**: Periodic background workers crawl configured agency websites on a configurable schedule.
+- **On-demand Crawling**: Trigger an immediate crawl for any individual agency directly from the web UI, without waiting for the next scheduled cycle.
 - **Dynamic Parsing**: Configure XPath selectors via the web UI to support new websites without code changes.
 - **Advanced Filtering**: Filter properties by status (Available, Sold, Under Option), price, bedrooms, living area, and multi-select postal codes.
-- **Centralized Logging**: Structured logging with Serilog, persisted to a shared SQLite database.
+- **Centralized Logging**: Structured logging with Serilog, persisted to a shared SQLite database, displayed in the browser's local timezone.
 - **Docker Orchestration**: Fully containerized with Docker Compose for easy deployment.
 - **CI/CD**: GitHub Actions workflow for automated Docker Hub image publishing with versioning.
 
@@ -51,12 +52,13 @@ Navigate to the **Agencies** tab to:
 - Add/Edit agency domains.
 - Configure crawler "Listing Checks" (URL patterns).
 - Define **Parser Configs**: Map XPath selectors for Title, Price, Description, Images, and Specifications (Bedrooms, EPC, Area).
+- **Crawl Now**: Click the ▶ button next to any agency to queue an immediate on-demand crawl. The crawler worker picks it up within one minute. A *Pending* badge is shown while the request is queued.
 
 ### Import/Export
 The system supports exporting and importing your entire agency configuration (rules and parsers) via JSON, making it easy to share or backup your crawling logic.
 
 ## 📈 Observability
-The **System Logs** dashboard provides real-time access to logs across all services. You can filter by:
+The **System Logs** dashboard provides real-time access to logs across all services. Timestamps are automatically converted from UTC (as stored by Serilog) to the browser server's local timezone. You can filter by:
 - Log Level (Info, Warning, Error, Fatal)
 - Source Class (e.g., `Immo.Crawler.CrawlerWorker`)
 
