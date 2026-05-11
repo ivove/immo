@@ -25,4 +25,19 @@ public class LogEntry
             return null;
         }
     }
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public DateTime? LocalTimestamp
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(Timestamp)) return null;
+            if (DateTime.TryParse(Timestamp, out var dt))
+            {
+                // Serilog SQLite sink usually stores in UTC
+                return DateTime.SpecifyKind(dt, DateTimeKind.Utc).ToLocalTime();
+            }
+            return null;
+        }
+    }
 }
