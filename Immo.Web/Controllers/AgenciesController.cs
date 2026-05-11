@@ -111,13 +111,52 @@ public class AgenciesController : Controller
     public async Task<IActionResult> DeleteConfirmed(int id)
     {
         var agency = await _context.Agencies.FindAsync(id);
-        if (agency != null)
-        {
-            _context.Agencies.Remove(agency);
-        }
+        if (agency == null) return NotFound();
 
+        await PurgeAgencyDataAsync(agency.AgencyDomain);
+
+        _context.Agencies.Remove(agency);
         await _context.SaveChangesAsync();
+
+        TempData["SuccessMessage"] = $"Agency \u0022{agency.AgencyDomain}\u0022 and all its crawled data have been deleted.";
         return RedirectToAction(nameof(Index));
+    }
+
+    // POST: Agencies/PurgeData/5
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> PurgeData(int id)
+    {
+        var agency = await _context.Agencies.FindAsync(id);
+        if (agency == null) return NotFound();
+
+        var (pages, properties) = await PurgeAgencyDataAsync(agency.AgencyDomain);
+
+        TempData["SuccessMessage"] = $"Purged {properties} propert{(properties == 1 ? "y" : "ies")} and {pages} raw page{(pages == 1 ? "" : "s")} for \u0022{agency.AgencyDomain}\u0022.";
+        return RedirectToAction(nameof(Index));
+    }
+
+    /// <summary>Deletes all RawPages whose URL contains the agency domain and all Properties linked to those pages.</summary>
+    private async Task<(int pages, int properties)> PurgeAgencyDataAsync(string agencyDomain)
+    {
+        // Normalise: strip scheme so both http and https URLs are matched
+        var domain = agencyDomain.Replace("https://", "").Replace("http://", "").TrimEnd('/');
+
+        var rawPages = await _context.RawPages
+            .Where(p => p.Url.Contains(domain))
+            .ToListAsync();
+
+        var rawPageIds = rawPages.Select(p => p.Id).ToHashSet();
+
+        var properties = await _context.Properties
+            .Where(p => rawPageIds.Contains(p.RawPageId))
+            .ToListAsync();
+
+        _context.Properties.RemoveRange(properties);
+        _context.RawPages.RemoveRange(rawPages);
+        await _context.SaveChangesAsync();
+
+        return (rawPages.Count, properties.Count);
     }
 
     // --- AgencyListingCheck Management ---

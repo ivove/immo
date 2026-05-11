@@ -13,15 +13,25 @@
                         <i class="bi bi-exclamation-triangle-fill display-1"></i>
                     </div>
                     <h2 class="fw-bold mb-3">Delete Agency?</h2>
-                    <p class="text-muted mb-4">
-                        Are you sure you want to delete <strong>@Model.AgencyDomain</strong>? 
-                        This will also remove all associated crawler rules.
+                    <p class="text-muted mb-2">
+                        Are you sure you want to delete <strong>@Model.AgencyDomain</strong>?
                     </p>
+                    <div class="alert alert-danger text-start small mb-4">
+                        <i class="bi bi-trash3-fill me-2"></i>
+                        <strong>This will permanently delete:</strong>
+                        <ul class="mb-0 mt-1">
+                            <li>The agency configuration &amp; crawler rules</li>
+                            <li>All crawled raw pages for this domain</li>
+                            <li>All parsed properties for this domain</li>
+                        </ul>
+                    </div>
 
                     <form asp-action="Delete">
                         <input type="hidden" asp-for="Id" />
                         <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-danger btn-lg">Yes, Delete Agency</button>
+                            <button type="submit" class="btn btn-danger btn-lg">
+                                <i class="bi bi-trash3 me-2"></i>Yes, Delete Everything
+                            </button>
                             <a asp-action="Index" class="btn btn-link text-muted">Cancel</a>
                         </div>
                     </form>
