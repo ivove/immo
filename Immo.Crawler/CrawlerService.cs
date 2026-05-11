@@ -184,8 +184,10 @@ public class CrawlerService
 
     private readonly HashSet<string> _visitedListingUrls = new();
 
-    public async Task CrawlListingPageAsync(string listingUrl)
+    public async Task CrawlListingPageAsync(string listingUrl,string agencyUrl = "")
     {
+        if (agencyUrl == "") { agencyUrl = listingUrl; }
+        
         if (_visitedListingUrls.Contains(listingUrl)) return;
         _visitedListingUrls.Add(listingUrl);
 
@@ -207,7 +209,7 @@ public class CrawlerService
                 return;
             }
 
-            var propertyLinks = extractor.ExtractLinks(htmlContent, listingUrl).ToList();
+            var propertyLinks = extractor.ExtractLinks(htmlContent, listingUrl,agencyUrl).ToList();
             _logger.LogInformation("Found {Count} property links on {Url}", propertyLinks.Count, listingUrl);
 
             var count = 0;
@@ -241,7 +243,7 @@ public class CrawlerService
 
                     foreach (var pLink in paginationLinks)
                     {
-                        await CrawlListingPageAsync(pLink);
+                        await CrawlListingPageAsync(pLink,agencyUrl);
                     }
                 }
             }
