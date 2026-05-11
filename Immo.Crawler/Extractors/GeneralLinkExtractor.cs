@@ -19,7 +19,7 @@ public class GeneralLinkExtractor : ILinkExtractorStrategy
         return true;
     }
 
-    public IEnumerable<string> ExtractLinks(string htmlContent, string baseUrl)
+    public IEnumerable<string> ExtractLinks(string htmlContent, string baseUrl,string agencyUrl="")
     {
         var document = new HtmlDocument();
         document.LoadHtml(htmlContent);
@@ -37,7 +37,7 @@ public class GeneralLinkExtractor : ILinkExtractorStrategy
             
             // Basic filtering to find property links. Adjust based on actual site structure.
             // Assuming property pages look like /nl/pand/12345 or similar.
-            if (!string.IsNullOrWhiteSpace(href) && CheckUrl(href,baseUrl)) 
+            if (!string.IsNullOrWhiteSpace(href) && CheckUrl(href,agencyUrl)) 
             {
                 // Handle relative vs absolute URLs
                 if (!href.StartsWith("http"))
