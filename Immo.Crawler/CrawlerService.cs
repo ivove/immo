@@ -216,10 +216,10 @@ public class CrawlerService
             // Find agencyId if not provided
             if (agencyId == null)
             {
-                var uri = new Uri(listingUrl);
-                var domain = uri.Host.Replace("www.", "");
-                var agency = _context.Agencies.FirstOrDefault(a => a.AgencyDomain.Contains(domain));
-                agencyId = agency?.Id;
+                var agencyUri = new Uri(listingUrl);
+                var agencyDomain = agencyUri.Host.Replace("www.", "");
+                var tempAgency = _context.Agencies.FirstOrDefault(a => a.AgencyDomain.Contains(agencyDomain));
+                agencyId = tempAgency?.Id;
             }
 
             var count = 0;
