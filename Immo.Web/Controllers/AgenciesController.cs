@@ -45,7 +45,7 @@ public class AgenciesController : Controller
     // POST: Agencies/Create
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create([Bind("Id,AgencyDomain")] Agency agency)
+    public async Task<IActionResult> Create([Bind("Id,AgencyDomain,IsSuspended,Notes")] Agency agency)
     {
         if (ModelState.IsValid)
         {
@@ -72,7 +72,7 @@ public class AgenciesController : Controller
     // POST: Agencies/Edit/5
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(int id, [Bind("Id,AgencyDomain")] Agency agency)
+    public async Task<IActionResult> Edit(int id, [Bind("Id,AgencyDomain,IsSuspended,Notes")] Agency agency)
     {
         if (id != agency.Id) return NotFound();
 
@@ -390,6 +390,21 @@ public class AgenciesController : Controller
         await _context.SaveChangesAsync();
 
         TempData["SuccessMessage"] = $"Crawl requested for \"{agency.AgencyDomain}\". The crawler will pick it up shortly.";
+        return RedirectToAction(nameof(Index));
+    }
+
+    // POST: Agencies/ToggleSuspension/5
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ToggleSuspension(int id)
+    {
+        var agency = await _context.Agencies.FindAsync(id);
+        if (agency == null) return NotFound();
+
+        agency.IsSuspended = !agency.IsSuspended;
+        await _context.SaveChangesAsync();
+
+        TempData["SuccessMessage"] = $"Agency \"{agency.AgencyDomain}\" has been {(agency.IsSuspended ? "suspended" : "resumed")}.";
         return RedirectToAction(nameof(Index));
     }
 

@@ -13,4 +13,8 @@ public class Agency
     /// Cleared by the worker after crawl is initiated.
     /// </summary>
     public DateTime? CrawlRequestedAt { get; set; }
+
+    public bool IsSuspended { get; set; }
+    
+    public string? Notes { get; set; }
 }

@@ -55,8 +55,24 @@
                     @foreach (var item in Model) {
                         <tr>
                             <td class="px-4 py-3">
-                                <div class="fw-semibold text-dark">@item.AgencyDomain</div>
-                                <small class="text-muted">ID: @item.Id</small>
+                                <div class="d-flex align-items-center">
+                                    <div class="fw-semibold text-dark">@item.AgencyDomain</div>
+                                    @if (item.IsSuspended)
+                                    {
+                                        <span class="badge rounded-pill bg-danger-subtle text-danger border border-danger-subtle ms-2">
+                                            <i class="bi bi-pause-fill"></i> Suspended
+                                        </span>
+                                    }
+                                </div>
+                                <div class="d-flex flex-column mt-1">
+                                    <small class="text-muted">ID: @item.Id</small>
+                                    @if (!string.IsNullOrEmpty(item.Notes))
+                                    {
+                                        <small class="text-muted text-truncate" style="max-width: 300px;" title="@item.Notes">
+                                            <i class="bi bi-sticky me-1"></i> @item.Notes
+                                        </small>
+                                    }
+                                </div>
                             </td>
                             <td class="px-4 py-3">
                                 <span class="badge rounded-pill bg-info-subtle text-info border border-info-subtle">
@@ -84,8 +100,13 @@
                                         </span>
                                     }
                                     <div class="btn-group">
+                                        <form asp-action="ToggleSuspension" asp-route-id="@item.Id" method="post" class="d-inline">
+                                            <button type="submit" class="btn btn-sm @(item.IsSuspended ? "btn-warning" : "btn-outline-warning")" title="@(item.IsSuspended ? "Resume crawling" : "Suspend crawling")">
+                                                <i class="bi @(item.IsSuspended ? "bi-pause-circle-fill" : "bi-pause-circle")"></i>
+                                            </button>
+                                        </form>
                                         <form asp-action="RequestCrawl" asp-route-id="@item.Id" method="post" class="d-inline">
-                                            <button type="submit" class="btn btn-sm btn-outline-primary" title="Run crawl now" @(item.CrawlRequestedAt.HasValue ? "disabled" : "")>
+                                            <button type="submit" class="btn btn-sm btn-outline-primary" title="Run crawl now" @(item.CrawlRequestedAt.HasValue || item.IsSuspended ? "disabled" : "")>
                                                 <i class="bi bi-play-fill"></i>
                                             </button>
                                         </form>

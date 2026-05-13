@@ -35,7 +35,7 @@ public class CrawlerWorker : BackgroundService
                     var crawler = scope.ServiceProvider.GetRequiredService<CrawlerService>();
 
                     var pendingAgencies = await context.Agencies
-                        .Where(a => a.CrawlRequestedAt != null)
+                        .Where(a => a.CrawlRequestedAt != null && !a.IsSuspended)
                         .ToListAsync(stoppingToken);
 
                     foreach (var agency in pendingAgencies)
@@ -60,7 +60,9 @@ public class CrawlerWorker : BackgroundService
                         var context = scope.ServiceProvider.GetRequiredService<ImmoContext>();
                         var crawler = scope.ServiceProvider.GetRequiredService<CrawlerService>();
 
-                        var agencies = await context.Agencies.ToListAsync(stoppingToken);
+                        var agencies = await context.Agencies
+                            .Where(a => !a.IsSuspended)
+                            .ToListAsync(stoppingToken);
                         _logger.LogInformation("Starting scheduled crawl for {Count} agencies...", agencies.Count);
 
                         foreach (var agency in agencies)
