@@ -113,7 +113,7 @@ public class AgenciesController : Controller
         var agency = await _context.Agencies.FindAsync(id);
         if (agency == null) return NotFound();
 
-        await PurgeAgencyDataAsync(agency.AgencyDomain);
+        await PurgeAgencyDataAsync(agency.Id);
 
         _context.Agencies.Remove(agency);
         await _context.SaveChangesAsync();
@@ -130,7 +130,7 @@ public class AgenciesController : Controller
         var agency = await _context.Agencies.FindAsync(id);
         if (agency == null) return NotFound();
 
-        var (pages, properties) = await PurgeAgencyDataAsync(agency.AgencyDomain);
+        var (pages, properties) = await PurgeAgencyDataAsync(agency.Id);
 
         TempData["SuccessMessage"] = $"Purged {properties} propert{(properties == 1 ? "y" : "ies")} and {pages} raw page{(pages == 1 ? "" : "s")} for \u0022{agency.AgencyDomain}\u0022.";
         return RedirectToAction(nameof(Index));
@@ -144,25 +144,20 @@ public class AgenciesController : Controller
         var agency = await _context.Agencies.FindAsync(id);
         if (agency == null) return NotFound();
 
-        var count = await ReparseAgencyDataAsync(agency.AgencyDomain);
+        var count = await ReparseAgencyDataAsync(agency.Id);
 
         TempData["SuccessMessage"] = $"Queued {count} page{(count == 1 ? "" : "s")} for reparsing for \u0022{agency.AgencyDomain}\u0022. The parser will process them shortly.";
         return RedirectToAction(nameof(Index));
     }
 
-    private async Task<(int pages, int properties)> PurgeAgencyDataAsync(string agencyDomain)
+    private async Task<(int pages, int properties)> PurgeAgencyDataAsync(int agencyId)
     {
-        // Normalise: strip scheme so both http and https URLs are matched
-        var domain = agencyDomain.Replace("https://", "").Replace("http://", "").TrimEnd('/');
-
         var rawPages = await _context.RawPages
-            .Where(p => p.Url.Contains(domain))
+            .Where(p => p.AgencyId == agencyId)
             .ToListAsync();
 
-        var rawPageIds = rawPages.Select(p => p.Id).ToHashSet();
-
         var properties = await _context.Properties
-            .Where(p => rawPageIds.Contains(p.RawPageId))
+            .Where(p => p.AgencyId == agencyId)
             .ToListAsync();
 
         _context.Properties.RemoveRange(properties);
@@ -173,12 +168,10 @@ public class AgenciesController : Controller
     }
 
     /// <summary>Resets IsParsed to false for all RawPages belonging to the agency.</summary>
-    private async Task<int> ReparseAgencyDataAsync(string agencyDomain)
+    private async Task<int> ReparseAgencyDataAsync(int agencyId)
     {
-        var domain = agencyDomain.Replace("https://", "").Replace("http://", "").TrimEnd('/');
-
         var rawPages = await _context.RawPages
-            .Where(p => p.Url.Contains(domain))
+            .Where(p => p.AgencyId == agencyId)
             .ToListAsync();
 
         foreach (var page in rawPages)

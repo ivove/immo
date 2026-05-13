@@ -20,5 +20,9 @@ public class Property
     public string? EpcScore { get; set; }
     public bool Sold { get; set; } = false;
     public bool UnderOption { get; set; } = false;
+    
     public int RawPageId { get; set; }
+    
+    public int? AgencyId { get; set; }
+    public Agency? Agency { get; set; }
 }

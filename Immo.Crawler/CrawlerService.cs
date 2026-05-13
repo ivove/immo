@@ -32,7 +32,7 @@ public class CrawlerService
 
     private readonly HashSet<string> _crawledPropertyUrls = new();
 
-    public async Task CrawlPageAsync(string url)
+    public async Task CrawlPageAsync(string url, int? agencyId = null)
     {
         _crawledPropertyUrls.Add(url);
         try
@@ -55,7 +55,7 @@ public class CrawlerService
             else
             {
                 _logger.LogInformation("Crawling new page {Url}...", url);
-                await FetchAndSaveAsync(url);
+                await FetchAndSaveAsync(url, agencyId);
             }
         }
         catch (Exception ex)
@@ -98,7 +98,7 @@ public class CrawlerService
         }
     }
 
-    private async Task FetchAndSaveAsync(string url)
+    private async Task FetchAndSaveAsync(string url, int? agencyId)
     {
         await ApplyRateLimit();
 
@@ -119,7 +119,8 @@ public class CrawlerService
             HtmlContent = htmlContent,
             ContentHash = hash,
             CrawledAt = DateTime.UtcNow,
-            IsParsed = false
+            IsParsed = false,
+            AgencyId = agencyId
         };
 
         _context.RawPages.Add(rawPage);
@@ -184,7 +185,7 @@ public class CrawlerService
 
     private readonly HashSet<string> _visitedListingUrls = new();
 
-    public async Task CrawlListingPageAsync(string listingUrl,string agencyUrl = "")
+    public async Task CrawlListingPageAsync(string listingUrl, string agencyUrl = "", int? agencyId = null)
     {
         if (agencyUrl == "") { agencyUrl = listingUrl; }
         
@@ -212,10 +213,19 @@ public class CrawlerService
             var propertyLinks = extractor.ExtractLinks(htmlContent, listingUrl,agencyUrl).ToList();
             _logger.LogInformation("Found {Count} property links on {Url}", propertyLinks.Count, listingUrl);
 
+            // Find agencyId if not provided
+            if (agencyId == null)
+            {
+                var uri = new Uri(listingUrl);
+                var domain = uri.Host.Replace("www.", "");
+                var agency = _context.Agencies.FirstOrDefault(a => a.AgencyDomain.Contains(domain));
+                agencyId = agency?.Id;
+            }
+
             var count = 0;
             foreach (var link in propertyLinks)
             {
-                await CrawlPageAsync(link);
+                await CrawlPageAsync(link, agencyId);
                 count++;
             }
 
@@ -243,7 +253,7 @@ public class CrawlerService
 
                     foreach (var pLink in paginationLinks)
                     {
-                        await CrawlListingPageAsync(pLink,agencyUrl);
+                        await CrawlListingPageAsync(pLink, agencyUrl, agencyId);
                     }
                 }
             }

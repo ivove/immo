@@ -44,6 +44,18 @@ public class ImmoContext : DbContext
             .WithOne(c => c.Agency)
             .HasForeignKey<ParserConfig>(c => c.AgencyId);
 
+        modelBuilder.Entity<Agency>()
+            .HasMany(a => a.RawPages)
+            .WithOne(p => p.Agency)
+            .HasForeignKey(p => p.AgencyId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<Agency>()
+            .HasMany(a => a.Properties)
+            .WithOne(p => p.Agency)
+            .HasForeignKey(p => p.AgencyId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         // Seed default settings row
         modelBuilder.Entity<AppSettings>().HasData(new AppSettings
         {

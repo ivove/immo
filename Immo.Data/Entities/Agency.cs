@@ -17,4 +17,7 @@ public class Agency
     public bool IsSuspended { get; set; }
     
     public string? Notes { get; set; }
+
+    public List<RawPage> RawPages { get; set; } = [];
+    public List<Property> Properties { get; set; } = [];
 }

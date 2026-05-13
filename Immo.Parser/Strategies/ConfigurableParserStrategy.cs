@@ -23,10 +23,19 @@ public class ConfigurableParserStrategy : IParserStrategy
 
     public Property Parse(RawPage page, HtmlDocument document)
     {
-        var domain = new Uri(page.Url).Host.Replace("www.", "");
-        var config = _context.ParserConfigs
-            .Include(c => c.Agency)
-            .FirstOrDefault(c => c.Agency.AgencyDomain.Contains(domain));
+        ParserConfig? config = null;
+        if (page.AgencyId.HasValue)
+        {
+            config = _context.ParserConfigs.FirstOrDefault(c => c.AgencyId == page.AgencyId.Value);
+        }
+
+        if (config == null)
+        {
+            var domain = new Uri(page.Url).Host.Replace("www.", "");
+            config = _context.ParserConfigs
+                .Include(c => c.Agency)
+                .FirstOrDefault(c => c.Agency.AgencyDomain.Contains(domain));
+        }
 
         if (config == null) return null!;
 

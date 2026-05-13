@@ -8,4 +8,7 @@ public class RawPage
     public string? ContentHash { get; set; }
     public DateTime CrawledAt { get; set; }
     public bool IsParsed { get; set; }
+    
+    public int? AgencyId { get; set; }
+    public Agency? Agency { get; set; }
 }
