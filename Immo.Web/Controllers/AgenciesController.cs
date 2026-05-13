@@ -136,7 +136,20 @@ public class AgenciesController : Controller
         return RedirectToAction(nameof(Index));
     }
 
-    /// <summary>Deletes all RawPages whose URL contains the agency domain and all Properties linked to those pages.</summary>
+    // POST: Agencies/ReparseData/5
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ReparseData(int id)
+    {
+        var agency = await _context.Agencies.FindAsync(id);
+        if (agency == null) return NotFound();
+
+        var count = await ReparseAgencyDataAsync(agency.AgencyDomain);
+
+        TempData["SuccessMessage"] = $"Queued {count} page{(count == 1 ? "" : "s")} for reparsing for \u0022{agency.AgencyDomain}\u0022. The parser will process them shortly.";
+        return RedirectToAction(nameof(Index));
+    }
+
     private async Task<(int pages, int properties)> PurgeAgencyDataAsync(string agencyDomain)
     {
         // Normalise: strip scheme so both http and https URLs are matched
@@ -157,6 +170,24 @@ public class AgenciesController : Controller
         await _context.SaveChangesAsync();
 
         return (rawPages.Count, properties.Count);
+    }
+
+    /// <summary>Resets IsParsed to false for all RawPages belonging to the agency.</summary>
+    private async Task<int> ReparseAgencyDataAsync(string agencyDomain)
+    {
+        var domain = agencyDomain.Replace("https://", "").Replace("http://", "").TrimEnd('/');
+
+        var rawPages = await _context.RawPages
+            .Where(p => p.Url.Contains(domain))
+            .ToListAsync();
+
+        foreach (var page in rawPages)
+        {
+            page.IsParsed = false;
+        }
+
+        await _context.SaveChangesAsync();
+        return rawPages.Count;
     }
 
     // --- AgencyListingCheck Management ---

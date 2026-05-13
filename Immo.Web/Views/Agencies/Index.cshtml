@@ -89,6 +89,12 @@
                                                 <i class="bi bi-play-fill"></i>
                                             </button>
                                         </form>
+                                        <form asp-action="ReparseData" asp-route-id="@item.Id" method="post" class="d-inline"
+                                              onsubmit="return confirm('Reparse all existing pages for \'@item.AgencyDomain\'? This will update property details based on the current parser configuration.')">
+                                            <button type="submit" class="btn btn-sm btn-outline-info" title="Reparse all properties">
+                                                <i class="bi bi-arrow-repeat"></i>
+                                            </button>
+                                        </form>
                                         <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-secondary" title="Edit">
                                             <i class="bi bi-pencil"></i>
                                         </a>
