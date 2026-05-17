@@ -150,6 +150,58 @@ public class AgenciesController : Controller
         return RedirectToAction(nameof(Index));
     }
 
+    // POST: Agencies/FixAgencyReferences
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> FixAgencyReferences()
+    {
+        var agencies = await _context.Agencies.ToListAsync();
+        int rawPagesFixed = 0;
+        int propertiesFixed = 0;
+
+        var rawPagesToFix = await _context.RawPages.Where(p => p.AgencyId == null).ToListAsync();
+        foreach (var page in rawPagesToFix)
+        {
+            if (Uri.TryCreate(page.Url, UriKind.Absolute, out var uri))
+            {
+                var domain = uri.Host.Replace("www.", "");
+                var agency = agencies.FirstOrDefault(a => a.AgencyDomain.Contains(domain));
+                if (agency != null)
+                {
+                    page.AgencyId = agency.Id;
+                    rawPagesFixed++;
+                }
+            }
+        }
+
+        var propertiesToFix = await _context.Properties.Where(p => p.AgencyId == null).ToListAsync();
+        foreach (var property in propertiesToFix)
+        {
+            if (Uri.TryCreate(property.SourceUrl, UriKind.Absolute, out var uri))
+            {
+                var domain = uri.Host.Replace("www.", "");
+                var agency = agencies.FirstOrDefault(a => a.AgencyDomain.Contains(domain));
+                if (agency != null)
+                {
+                    property.AgencyId = agency.Id;
+                    propertiesFixed++;
+                }
+            }
+        }
+
+        if (rawPagesFixed > 0 || propertiesFixed > 0)
+        {
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = $"Fixed agency references for {rawPagesFixed} raw pages and {propertiesFixed} properties.";
+        }
+        else
+        {
+            TempData["SuccessMessage"] = "All raw pages and properties already have their agency references set correctly.";
+        }
+
+        return RedirectToAction(nameof(Index));
+    }
+
     private async Task<(int pages, int properties)> PurgeAgencyDataAsync(int agencyId)
     {
         var rawPages = await _context.RawPages

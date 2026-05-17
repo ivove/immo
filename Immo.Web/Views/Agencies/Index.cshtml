@@ -20,6 +20,11 @@
                 </label>
                 <input type="file" id="importFile" name="importFile" class="d-none" accept=".json" onchange="this.form.submit()" />
             </form>
+            <form asp-action="FixAgencyReferences" method="post" class="d-inline" onsubmit="return confirm('This will scan all existing Raw Pages and Properties without an agency, and attempt to link them based on their domain. Proceed?');">
+                <button type="submit" class="btn btn-outline-info btn-lg shadow-sm" title="Backfill missing agency references">
+                    <i class="bi bi-link"></i> Fix References
+                </button>
+            </form>
             <a asp-action="Create" class="btn btn-primary btn-lg shadow-sm">
                 <i class="bi bi-plus-lg me-2"></i> Add Agency
             </a>
