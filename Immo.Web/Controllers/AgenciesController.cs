@@ -30,6 +30,7 @@ public class AgenciesController : Controller
 
         var agency = await _context.Agencies
             .Include(a => a.AgencyListingChecks)
+            .Include(a => a.ParserConfig)
             .FirstOrDefaultAsync(m => m.Id == id);
         if (agency == null) return NotFound();
 
@@ -45,7 +46,7 @@ public class AgenciesController : Controller
     // POST: Agencies/Create
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create([Bind("Id,AgencyDomain,IsSuspended,Notes")] Agency agency)
+    public async Task<IActionResult> Create([Bind("Id,AgencyDomain,PaginationSelector,IsSuspended,Notes")] Agency agency)
     {
         if (ModelState.IsValid)
         {
@@ -72,7 +73,7 @@ public class AgenciesController : Controller
     // POST: Agencies/Edit/5
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(int id, [Bind("Id,AgencyDomain,IsSuspended,Notes")] Agency agency)
+    public async Task<IActionResult> Edit(int id, [Bind("Id,AgencyDomain,PaginationSelector,IsSuspended,Notes")] Agency agency)
     {
         if (id != agency.Id) return NotFound();
 

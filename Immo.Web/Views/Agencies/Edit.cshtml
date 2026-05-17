@@ -28,6 +28,15 @@
                             <span asp-validation-for="AgencyDomain" class="text-danger"></span>
                         </div>
 
+                        <div class="form-floating mb-4">
+                            <input asp-for="PaginationSelector" class="form-control" placeholder="e.g. .pagination a.next" />
+                            <label asp-for="PaginationSelector">Pagination Selector (CSS or XPath)</label>
+                            <span asp-validation-for="PaginationSelector" class="text-danger"></span>
+                            <div class="form-text mt-2">
+                                CSS or XPath selector to locate "next page" links on listing pages (e.g. <code>.pagination a.next</code>).
+                            </div>
+                        </div>
+
                         <div class="form-check form-switch mb-4">
                             <input class="form-check-input" type="checkbox" asp-for="IsSuspended">
                             <label class="form-check-label" asp-for="IsSuspended">Suspend Crawling</label>
