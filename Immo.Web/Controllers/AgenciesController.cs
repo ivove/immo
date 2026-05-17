@@ -17,10 +17,31 @@ public class AgenciesController : Controller
     // GET: Agencies
     public async Task<IActionResult> Index()
     {
-        return View(await _context.Agencies
+        var agencies = await _context.Agencies
             .Include(a => a.AgencyListingChecks)
             .Include(a => a.ParserConfig)
-            .ToListAsync());
+            .ToListAsync();
+
+        var stats = await _context.Agencies
+            .Select(a => new {
+                AgencyId = a.Id,
+                PagesCount = a.RawPages.Count(),
+                AvailablePropertiesCount = a.Properties.Count(p => !p.Sold)
+            })
+            .ToDictionaryAsync(
+                x => x.AgencyId, 
+                x => new AgencyStatsViewModel { PagesCount = x.PagesCount, AvailablePropertiesCount = x.AvailablePropertiesCount }
+            );
+
+        ViewBag.Stats = stats;
+
+        return View(agencies);
+    }
+
+    public class AgencyStatsViewModel 
+    {
+        public int PagesCount { get; set; }
+        public int AvailablePropertiesCount { get; set; }
     }
 
     // GET: Agencies/Details/5
