@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
@@ -17,6 +18,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Immo.Data\Immo.Data.csproj" />
+    <ProjectReference Include="..\Immo.Parser\Immo.Parser.csproj" />
+    <ProjectReference Include="..\Immo.Crawler\Immo.Crawler.csproj" />
   </ItemGroup>
 
 </Project>

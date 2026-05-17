@@ -236,6 +236,89 @@ public class AgenciesController : Controller
         return rawPages.Count;
     }
 
+    // GET: Agencies/Debug/5
+    public async Task<IActionResult> Debug(int? agencyId)
+    {
+        if (agencyId == null) return NotFound();
+
+        var agency = await _context.Agencies.FindAsync(agencyId);
+        if (agency == null) return NotFound();
+
+        ViewBag.AgencyId = agency.Id;
+        ViewBag.AgencyDomain = agency.AgencyDomain;
+        return View();
+    }
+
+    // POST: Agencies/Debug
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Debug(int agencyId, string urlToTest)
+    {
+        var agency = await _context.Agencies
+            .Include(a => a.AgencyListingChecks)
+            .Include(a => a.ParserConfig)
+            .FirstOrDefaultAsync(a => a.Id == agencyId);
+
+        if (agency == null) return NotFound();
+
+        ViewBag.AgencyId = agency.Id;
+        ViewBag.AgencyDomain = agency.AgencyDomain;
+        ViewBag.TestedUrl = urlToTest;
+
+        if (string.IsNullOrWhiteSpace(urlToTest))
+        {
+            ModelState.AddModelError("", "URL is required.");
+            return View();
+        }
+
+        try
+        {
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            var response = await client.GetAsync(urlToTest);
+            response.EnsureSuccessStatusCode();
+            var html = await response.Content.ReadAsStringAsync();
+
+            var doc = new HtmlAgilityPack.HtmlDocument();
+            doc.LoadHtml(html);
+
+            // 1. Pagination Extraction
+            var paginationLinks = new List<string>();
+            if (!string.IsNullOrEmpty(agency.PaginationSelector))
+            {
+                var nodes = doc.DocumentNode.SelectNodes(agency.PaginationSelector);
+                if (nodes != null)
+                {
+                    paginationLinks = nodes.Select(n => n.GetAttributeValue("href", ""))
+                                           .Where(href => !string.IsNullOrEmpty(href))
+                                           .Select(href => new Uri(new Uri(urlToTest), href).ToString())
+                                           .Distinct()
+                                           .ToList();
+                }
+            }
+            ViewBag.PaginationLinks = paginationLinks;
+
+            // 2. Property Link Extraction
+            var linkExtractor = new Immo.Crawler.Extractors.GeneralLinkExtractor(_context);
+            var propertyLinks = linkExtractor.ExtractLinks(html, urlToTest, agency.AgencyDomain).ToList();
+            ViewBag.PropertyLinks = propertyLinks;
+
+            // 3. Parser Strategy
+            var rawPage = new Immo.Data.Entities.RawPage { Url = urlToTest, HtmlContent = html, AgencyId = agency.Id, CrawledAt = DateTime.UtcNow };
+            var parser = new Immo.Parser.Strategies.ConfigurableParserStrategy(_context);
+            var parsedProperty = parser.Parse(rawPage, doc);
+            ViewBag.ParsedProperty = parsedProperty;
+            
+            ViewBag.RawHtmlLength = html.Length;
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError("", "Error fetching or parsing URL: " + ex.Message);
+        }
+
+        return View();
+    }
+
     // --- AgencyListingCheck Management ---
 
     // GET: Agencies/AddCheck/5
