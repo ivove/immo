@@ -10,10 +10,12 @@ namespace Immo.Web.Controllers;
 public class HomeController : Controller
 {
     private readonly ImmoContext _context;
+    private readonly ILogger<HomeController> _logger;
 
-    public HomeController(ImmoContext context)
+    public HomeController(ImmoContext context, ILogger<HomeController> logger)
     {
         _context = context;
+        _logger = logger;
     }
 
     public async Task<IActionResult> Index(
@@ -26,6 +28,8 @@ public class HomeController : Controller
         string? status = "available",
         string? recency = null)
     {
+        _logger.LogInformation("Property search requested. Filters - Price: [{MinPrice} - {MaxPrice}], Postal Codes: [{ZipCodes}], Beds: >= {MinBedrooms}, Area: >= {MinLivingArea} m², EPC: <= {MaxEpc}, Status: {Status}, Recency: {Recency}",
+            minPrice, maxPrice, zipCodes != null ? string.Join(", ", zipCodes) : "All", minBedrooms, minLivingArea, maxEpc, status, recency ?? "Anytime");
         var settings = await _context.AppSettings.FirstOrDefaultAsync() ?? new AppSettings();
         var thresholdDays = settings.NewOrUpdatedThresholdDays;
         var thresholdDate = DateTime.UtcNow.AddDays(-thresholdDays);
@@ -84,6 +88,7 @@ public class HomeController : Controller
         }
 
         var properties = await query.OrderByDescending(p => p.Id).ToListAsync();
+        _logger.LogInformation("Found {Count} matching properties.", properties.Count);
         
         var rawLocations = await _context.Properties
             .Where(p => !string.IsNullOrEmpty(p.ZipCode))

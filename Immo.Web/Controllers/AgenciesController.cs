@@ -8,15 +8,18 @@ namespace Immo.Web.Controllers;
 public class AgenciesController : Controller
 {
     private readonly ImmoContext _context;
+    private readonly ILogger<AgenciesController> _logger;
 
-    public AgenciesController(ImmoContext context)
+    public AgenciesController(ImmoContext context, ILogger<AgenciesController> logger)
     {
         _context = context;
+        _logger = logger;
     }
 
     // GET: Agencies
     public async Task<IActionResult> Index()
     {
+        _logger.LogInformation("Retrieving list of all agencies and statistics.");
         var agencies = await _context.Agencies
             .Include(a => a.AgencyListingChecks)
             .Include(a => a.ParserConfig)
@@ -47,13 +50,16 @@ public class AgenciesController : Controller
     // GET: Agencies/Details/5
     public async Task<IActionResult> Details(int? id)
     {
-        if (id == null) return NotFound();
-
+        _logger.LogInformation("Displaying details for Agency ID: {Id}", id);
         var agency = await _context.Agencies
             .Include(a => a.AgencyListingChecks)
             .Include(a => a.ParserConfig)
             .FirstOrDefaultAsync(m => m.Id == id);
-        if (agency == null) return NotFound();
+        if (agency == null)
+        {
+            _logger.LogWarning("Agency details requested for non-existent Agency ID: {Id}", id);
+            return NotFound();
+        }
 
         return View(agency);
     }
@@ -73,8 +79,10 @@ public class AgenciesController : Controller
         {
             _context.Add(agency);
             await _context.SaveChangesAsync();
+            _logger.LogInformation("Successfully created new agency {AgencyDomain} (ID: {Id}). Notes: {Notes}", agency.AgencyDomain, agency.Id, agency.Notes);
             return RedirectToAction(nameof(Index));
         }
+        _logger.LogWarning("Failed to create agency {AgencyDomain} due to validation errors.", agency.AgencyDomain);
         return View(agency);
     }
 
@@ -102,16 +110,26 @@ public class AgenciesController : Controller
         {
             try
             {
+                _logger.LogInformation("Saving updates for agency {AgencyDomain} (ID: {Id}). Notes: {Notes}, Suspended: {IsSuspended}", agency.AgencyDomain, agency.Id, agency.Notes, agency.IsSuspended);
                 _context.Update(agency);
                 await _context.SaveChangesAsync();
             }
-            catch (DbUpdateConcurrencyException)
+            catch (DbUpdateConcurrencyException ex)
             {
-                if (!AgencyExists(agency.Id)) return NotFound();
-                else throw;
+                if (!AgencyExists(agency.Id))
+                {
+                    _logger.LogWarning("Concurrency error: Agency ID {Id} no longer exists during update.", agency.Id);
+                    return NotFound();
+                }
+                else
+                {
+                    _logger.LogError(ex, "Concurrency database update error occurred while editing Agency ID {Id}.", agency.Id);
+                    throw;
+                }
             }
             return RedirectToAction(nameof(Index));
         }
+        _logger.LogWarning("Failed to save updates for agency {AgencyDomain} (ID: {Id}) due to validation errors.", agency.AgencyDomain, agency.Id);
         return View(agency);
     }
 
@@ -133,13 +151,19 @@ public class AgenciesController : Controller
     public async Task<IActionResult> DeleteConfirmed(int id)
     {
         var agency = await _context.Agencies.FindAsync(id);
-        if (agency == null) return NotFound();
+        if (agency == null)
+        {
+            _logger.LogWarning("Delete request received for non-existent Agency ID {Id}.", id);
+            return NotFound();
+        }
 
+        _logger.LogInformation("Initiating full deletion of agency {AgencyDomain} (ID: {Id}) and all of its associated pages and properties.", agency.AgencyDomain, agency.Id);
         await PurgeAgencyDataAsync(agency.Id);
 
         _context.Agencies.Remove(agency);
         await _context.SaveChangesAsync();
 
+        _logger.LogInformation("Successfully deleted agency {AgencyDomain} (ID: {Id}) from database.", agency.AgencyDomain, agency.Id);
         TempData["SuccessMessage"] = $"Agency \u0022{agency.AgencyDomain}\u0022 and all its crawled data have been deleted.";
         return RedirectToAction(nameof(Index));
     }
@@ -150,10 +174,16 @@ public class AgenciesController : Controller
     public async Task<IActionResult> PurgeData(int id)
     {
         var agency = await _context.Agencies.FindAsync(id);
-        if (agency == null) return NotFound();
+        if (agency == null)
+        {
+            _logger.LogWarning("Purge data request received for non-existent Agency ID {Id}.", id);
+            return NotFound();
+        }
 
+        _logger.LogInformation("Purging crawled data (pages/properties) for agency {AgencyDomain} (ID: {Id}).", agency.AgencyDomain, agency.Id);
         var (pages, properties) = await PurgeAgencyDataAsync(agency.Id);
 
+        _logger.LogInformation("Successfully purged {Properties} properties and {Pages} raw pages for agency {AgencyDomain} (ID: {Id}).", properties, pages, agency.AgencyDomain, agency.Id);
         TempData["SuccessMessage"] = $"Purged {properties} propert{(properties == 1 ? "y" : "ies")} and {pages} raw page{(pages == 1 ? "" : "s")} for \u0022{agency.AgencyDomain}\u0022.";
         return RedirectToAction(nameof(Index));
     }
@@ -164,10 +194,16 @@ public class AgenciesController : Controller
     public async Task<IActionResult> ReparseData(int id)
     {
         var agency = await _context.Agencies.FindAsync(id);
-        if (agency == null) return NotFound();
+        if (agency == null)
+        {
+            _logger.LogWarning("Reparse request received for non-existent Agency ID {Id}.", id);
+            return NotFound();
+        }
 
+        _logger.LogInformation("Queuing parsed pages for reparsing for agency {AgencyDomain} (ID: {Id}).", agency.AgencyDomain, agency.Id);
         var count = await ReparseAgencyDataAsync(agency.Id);
 
+        _logger.LogInformation("Successfully queued {Count} pages for reparsing for agency {AgencyDomain} (ID: {Id}).", count, agency.AgencyDomain, agency.Id);
         TempData["SuccessMessage"] = $"Queued {count} page{(count == 1 ? "" : "s")} for reparsing for \u0022{agency.AgencyDomain}\u0022. The parser will process them shortly.";
         return RedirectToAction(nameof(Index));
     }
@@ -460,6 +496,7 @@ public class AgenciesController : Controller
 
         try
         {
+            _logger.LogInformation("Import preview requested. Analyzing file {FileName} ({Size} bytes).", importFile.FileName, importFile.Length);
             using var stream = importFile.OpenReadStream();
             var options = new System.Text.Json.JsonSerializerOptions
             {
@@ -469,6 +506,7 @@ public class AgenciesController : Controller
 
             if (importedAgencies == null || importedAgencies.Count == 0)
             {
+                _logger.LogWarning("Import file {FileName} contained no valid agency objects.", importFile.FileName);
                 TempData["ErrorMessage"] = "No valid agencies found in the imported file.";
                 return RedirectToAction(nameof(Index));
             }
@@ -507,10 +545,14 @@ public class AgenciesController : Controller
                 }
             }
 
+            _logger.LogInformation("Import analysis complete. Found {NewCount} new domains and {ConflictCount} existing domains in imported file.", 
+                viewModel.NewAgencies.Count, viewModel.ConflictingAgencies.Count);
+
             return View("ImportPreview", viewModel);
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Error occurred during import file analysis.");
             TempData["ErrorMessage"] = $"Error analyzing import file: {ex.Message}";
             return RedirectToAction(nameof(Index));
         }
@@ -529,6 +571,7 @@ public class AgenciesController : Controller
 
         try
         {
+            _logger.LogInformation("ConfirmImport requested to persist parsed agencies.");
             var options = new System.Text.Json.JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
@@ -550,6 +593,7 @@ public class AgenciesController : Controller
 
                     if (existing == null)
                     {
+                        _logger.LogInformation("Import: Adding new agency domain {AgencyDomain}.", imported.AgencyDomain);
                         // Insert new, reset IDs
                         imported.Id = 0;
                         if (imported.ParserConfig != null) imported.ParserConfig.Id = 0;
@@ -562,6 +606,7 @@ public class AgenciesController : Controller
                     }
                     else
                     {
+                        _logger.LogInformation("Import: Merging configuration details into existing agency domain {AgencyDomain}.", imported.AgencyDomain);
                         // Update existing config
                         if (imported.ParserConfig != null)
                         {
@@ -624,11 +669,13 @@ public class AgenciesController : Controller
                     message = "Import completed, but no changes were made.";
                 }
 
+                _logger.LogInformation("Import confirmed and completed. {Message}", message);
                 TempData["SuccessMessage"] = message;
             }
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Error occurred during import confirmation save.");
             TempData["ErrorMessage"] = $"Error importing agencies: {ex.Message}";
         }
 
