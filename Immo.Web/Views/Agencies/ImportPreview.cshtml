@@ -1,0 +1,225 @@
+@model Immo.Web.Controllers.ImportPreviewViewModel
+
+@{
+    ViewData["Title"] = "Import Agencies - Preview";
+}
+
+<div class="container py-4 animate-slide-up">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a asp-action="Index">Agencies</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Import Preview</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="display-5 fw-bold text-dark">Import Agencies</h1>
+            <p class="text-muted">Review the changes from your JSON file before applying them to the database.</p>
+        </div>
+    </div>
+
+    @if (Model.ConflictingAgencies.Any())
+    {
+        <div class="alert alert-warning border-0 shadow-sm rounded-4 p-4 mb-4 d-flex align-items-start gap-3 backdrop-blur bg-warning bg-opacity-10">
+            <span class="fs-2 text-warning lh-1">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+            </span>
+            <div>
+                <h4 class="alert-heading fw-bold text-warning-emphasis">Existing Agencies Detected</h4>
+                <p class="mb-0 text-warning-emphasis">
+                    We found <strong>@Model.ConflictingAgencies.Count</strong> agency domain(s) that already exist in your system. 
+                    If you proceed, their settings (pagination selector, notes, suspension status), parser configurations, and listing check rules 
+                    will be <strong>merged and updated</strong> with the imported values. Existing crawled properties and pages will not be affected.
+                </p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-success border-0 shadow-sm rounded-4 p-4 mb-4 d-flex align-items-start gap-3 backdrop-blur bg-success bg-opacity-10">
+            <span class="fs-2 text-success lh-1">
+                <i class="bi bi-check-circle-fill"></i>
+            </span>
+            <div>
+                <h4 class="alert-heading fw-bold text-success-emphasis">Ready to Import</h4>
+                <p class="mb-0 text-success-emphasis">
+                    All <strong>@Model.NewAgencies.Count</strong> agency domain(s) from the file are new and ready to be added to your system.
+                </p>
+            </div>
+        </div>
+    }
+
+    <div class="row g-4">
+        <!-- Main Preview Column -->
+        <div class="col-12">
+            @if (Model.ConflictingAgencies.Any())
+            {
+                <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden border-start border-warning border-4">
+                    <div class="card-header bg-warning bg-opacity-10 border-0 py-3 px-4">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <h5 class="mb-0 fw-bold text-warning-emphasis">
+                                <i class="bi bi-arrow-repeat me-2"></i> Agencies to Merge / Update (@Model.ConflictingAgencies.Count)
+                            </h5>
+                            <span class="badge rounded-pill bg-warning text-dark border border-warning-subtle">
+                                Existing
+                            </span>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th class="px-4 py-3 border-0">Agency Domain</th>
+                                    <th class="px-4 py-3 border-0">Parser Config</th>
+                                    <th class="px-4 py-3 border-0">Listing Rules</th>
+                                    <th class="px-4 py-3 border-0">Status</th>
+                                    <th class="px-4 py-3 border-0">Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var agency in Model.ConflictingAgencies)
+                                {
+                                    <tr>
+                                        <td class="px-4 py-3 fw-semibold text-dark">
+                                            @agency.AgencyDomain
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            @if (agency.HasParserConfig)
+                                            {
+                                                <span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle">
+                                                    <i class="bi bi-file-earmark-code-fill"></i> Will Update
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted small">None</span>
+                                            }
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <span class="badge rounded-pill bg-info-subtle text-info border border-info-subtle">
+                                                @agency.ListingChecksCount rules
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            @if (agency.IsSuspended)
+                                            {
+                                                <span class="badge rounded-pill bg-danger-subtle text-danger border border-danger-subtle">
+                                                    <i class="bi bi-pause-fill"></i> Suspended
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle">
+                                                    <i class="bi bi-play-fill"></i> Active
+                                                </span>
+                                            }
+                                        </td>
+                                        <td class="px-4 py-3 text-muted small text-truncate" style="max-width: 250px;" title="@agency.Notes">
+                                            @(string.IsNullOrWhiteSpace(agency.Notes) ? "-" : agency.Notes)
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+
+            @if (Model.NewAgencies.Any())
+            {
+                <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden border-start border-success border-4">
+                    <div class="card-header bg-success bg-opacity-10 border-0 py-3 px-4">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <h5 class="mb-0 fw-bold text-success-emphasis">
+                                <i class="bi bi-plus-circle me-2"></i> Agencies to Add as New (@Model.NewAgencies.Count)
+                            </h5>
+                            <span class="badge rounded-pill bg-success text-white border border-success-subtle">
+                                New
+                            </span>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th class="px-4 py-3 border-0">Agency Domain</th>
+                                    <th class="px-4 py-3 border-0">Parser Config</th>
+                                    <th class="px-4 py-3 border-0">Listing Rules</th>
+                                    <th class="px-4 py-3 border-0">Status</th>
+                                    <th class="px-4 py-3 border-0">Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var agency in Model.NewAgencies)
+                                {
+                                    <tr>
+                                        <td class="px-4 py-3 fw-semibold text-dark">
+                                            @agency.AgencyDomain
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            @if (agency.HasParserConfig)
+                                            {
+                                                <span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle">
+                                                    <i class="bi bi-file-earmark-code-fill"></i> Yes
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted small">None</span>
+                                            }
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <span class="badge rounded-pill bg-info-subtle text-info border border-info-subtle">
+                                                @agency.ListingChecksCount rules
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            @if (agency.IsSuspended)
+                                            {
+                                                <span class="badge rounded-pill bg-danger-subtle text-danger border border-danger-subtle">
+                                                    <i class="bi bi-pause-fill"></i> Suspended
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle">
+                                                    <i class="bi bi-play-fill"></i> Active
+                                                </span>
+                                            }
+                                        </td>
+                                        <td class="px-4 py-3 text-muted small text-truncate" style="max-width: 250px;" title="@agency.Notes">
+                                            @(string.IsNullOrWhiteSpace(agency.Notes) ? "-" : agency.Notes)
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden mt-4">
+                <div class="card-body p-4 bg-light bg-opacity-50">
+                    <form asp-action="ConfirmImport" method="post" class="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-3">
+                        <textarea name="serializedData" style="display:none;">@Model.SerializedData</textarea>
+                        
+                        <div class="text-muted text-center text-sm-start">
+                            <span class="fw-semibold text-dark d-block">Ready to proceed?</span>
+                            Confirming will update your database. You can always cancel to return back.
+                        </div>
+                        
+                        <div class="d-flex gap-3 w-100 w-sm-auto justify-content-center">
+                            <a asp-action="Index" class="btn btn-outline-secondary btn-lg px-4 shadow-sm">
+                                <i class="bi bi-x-circle me-1"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary btn-lg px-4 shadow-sm">
+                                <i class="bi bi-check-circle me-1"></i> Confirm & Import
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

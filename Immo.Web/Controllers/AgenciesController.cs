@@ -467,8 +467,79 @@ public class AgenciesController : Controller
             };
             var importedAgencies = await System.Text.Json.JsonSerializer.DeserializeAsync<List<Agency>>(stream, options);
 
+            if (importedAgencies == null || importedAgencies.Count == 0)
+            {
+                TempData["ErrorMessage"] = "No valid agencies found in the imported file.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            // Let's analyze new vs conflicting
+            var existingDomains = await _context.Agencies
+                .Select(a => a.AgencyDomain)
+                .ToListAsync();
+
+            var viewModel = new ImportPreviewViewModel();
+            var serializeOptions = new System.Text.Json.JsonSerializerOptions
+            {
+                ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles
+            };
+            viewModel.SerializedData = System.Text.Json.JsonSerializer.Serialize(importedAgencies, serializeOptions);
+
+            foreach (var imported in importedAgencies)
+            {
+                var isExisting = existingDomains.Contains(imported.AgencyDomain, StringComparer.OrdinalIgnoreCase);
+                var preview = new ImportAgencyPreview
+                {
+                    AgencyDomain = imported.AgencyDomain,
+                    HasParserConfig = imported.ParserConfig != null,
+                    ListingChecksCount = imported.AgencyListingChecks?.Count ?? 0,
+                    Notes = imported.Notes,
+                    IsSuspended = imported.IsSuspended
+                };
+
+                if (isExisting)
+                {
+                    viewModel.ConflictingAgencies.Add(preview);
+                }
+                else
+                {
+                    viewModel.NewAgencies.Add(preview);
+                }
+            }
+
+            return View("ImportPreview", viewModel);
+        }
+        catch (Exception ex)
+        {
+            TempData["ErrorMessage"] = $"Error analyzing import file: {ex.Message}";
+            return RedirectToAction(nameof(Index));
+        }
+    }
+
+    // POST: Agencies/ConfirmImport
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ConfirmImport(string serializedData)
+    {
+        if (string.IsNullOrWhiteSpace(serializedData))
+        {
+            TempData["ErrorMessage"] = "Import data was lost or invalid. Please try again.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        try
+        {
+            var options = new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+            var importedAgencies = System.Text.Json.JsonSerializer.Deserialize<List<Agency>>(serializedData, options);
+
             if (importedAgencies != null)
             {
+                int newCount = 0;
+                int mergedCount = 0;
+
                 foreach (var imported in importedAgencies)
                 {
                     // Find existing by domain
@@ -482,8 +553,12 @@ public class AgenciesController : Controller
                         // Insert new, reset IDs
                         imported.Id = 0;
                         if (imported.ParserConfig != null) imported.ParserConfig.Id = 0;
-                        foreach (var check in imported.AgencyListingChecks) check.Id = 0;
+                        if (imported.AgencyListingChecks != null)
+                        {
+                            foreach (var check in imported.AgencyListingChecks) check.Id = 0;
+                        }
                         _context.Agencies.Add(imported);
+                        newCount++;
                     }
                     else
                     {
@@ -493,31 +568,63 @@ public class AgenciesController : Controller
                             if (existing.ParserConfig == null)
                             {
                                 imported.ParserConfig.Id = 0;
+                                imported.ParserConfig.AgencyId = existing.Id;
                                 existing.ParserConfig = imported.ParserConfig;
                             }
                             else
                             {
                                 var existingConfigId = existing.ParserConfig.Id;
+                                var existingAgencyId = existing.ParserConfig.AgencyId;
                                 _context.Entry(existing.ParserConfig).CurrentValues.SetValues(imported.ParserConfig);
                                 existing.ParserConfig.Id = existingConfigId;
+                                existing.ParserConfig.AgencyId = existingAgencyId;
                             }
                         }
 
-                        // Just append new listing checks or overwrite? Let's overwrite for simplicity
-                        _context.AgencyListingChecks.RemoveRange(existing.AgencyListingChecks);
-                        foreach (var check in imported.AgencyListingChecks)
+                        // Overwrite listing checks
+                        if (imported.AgencyListingChecks != null)
                         {
-                            check.Id = 0;
-                            check.AgencyId = existing.Id;
-                            existing.AgencyListingChecks.Add(check);
+                            _context.AgencyListingChecks.RemoveRange(existing.AgencyListingChecks);
+                            foreach (var check in imported.AgencyListingChecks)
+                            {
+                                check.Id = 0;
+                                check.AgencyId = existing.Id;
+                                existing.AgencyListingChecks.Add(check);
+                            }
                         }
 
                         existing.PaginationSelector = imported.PaginationSelector;
+                        existing.IsSuspended = imported.IsSuspended;
+                        if (!string.IsNullOrEmpty(imported.Notes))
+                        {
+                            existing.Notes = imported.Notes;
+                        }
+
                         _context.Agencies.Update(existing);
+                        mergedCount++;
                     }
                 }
                 await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = "Agencies imported successfully.";
+                
+                var message = "";
+                if (newCount > 0 && mergedCount > 0)
+                {
+                    message = $"Import completed: {newCount} new agencies added, {mergedCount} existing agencies merged.";
+                }
+                else if (newCount > 0)
+                {
+                    message = $"Import completed: {newCount} new agencies added.";
+                }
+                else if (mergedCount > 0)
+                {
+                    message = $"Import completed: {mergedCount} existing agencies merged.";
+                }
+                else
+                {
+                    message = "Import completed, but no changes were made.";
+                }
+
+                TempData["SuccessMessage"] = message;
             }
         }
         catch (Exception ex)
@@ -563,3 +670,20 @@ public class AgenciesController : Controller
         return _context.Agencies.Any(e => e.Id == id);
     }
 }
+
+public class ImportPreviewViewModel
+{
+    public List<ImportAgencyPreview> NewAgencies { get; set; } = [];
+    public List<ImportAgencyPreview> ConflictingAgencies { get; set; } = [];
+    public string SerializedData { get; set; } = string.Empty;
+}
+
+public class ImportAgencyPreview
+{
+    public string AgencyDomain { get; set; } = string.Empty;
+    public bool HasParserConfig { get; set; }
+    public int ListingChecksCount { get; set; }
+    public string? Notes { get; set; }
+    public bool IsSuspended { get; set; }
+}
+
