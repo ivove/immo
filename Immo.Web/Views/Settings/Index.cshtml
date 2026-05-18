@@ -58,6 +58,20 @@
 
                         <div class="mb-5">
                             <h5 class="fw-bold mb-3 text-dark">
+                                <i class="bi bi-globe text-info me-2"></i> Timezone Settings
+                            </h5>
+                            <div class="bg-light p-4 rounded-4">
+                                <label asp-for="PreferredTimezone" class="form-label fw-semibold">Display Timezone</label>
+                                <select asp-for="PreferredTimezone" class="form-select form-select-lg border-0 shadow-none"
+                                        asp-items="@(new SelectList(ViewBag.Timezones, "Id", "DisplayName"))">
+                                </select>
+                                <div class="form-text mt-2">All dates and times displayed across the system will be adjusted to this timezone.</div>
+                                <span asp-validation-for="PreferredTimezone" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="mb-5">
+                            <h5 class="fw-bold mb-3 text-dark">
                                 <i class="bi bi-tag-fill text-danger me-2"></i> Sold Keywords
                             </h5>
                             <div class="bg-light p-4 rounded-4">

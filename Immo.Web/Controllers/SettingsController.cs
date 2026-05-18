@@ -19,6 +19,11 @@ public class SettingsController : Controller
     {
         var settings = await _context.AppSettings.FirstOrDefaultAsync() 
                       ?? new AppSettings { Id = 1 };
+        
+        ViewBag.Timezones = TimeZoneInfo.GetSystemTimeZones()
+            .OrderBy(tz => tz.DisplayName)
+            .ToList();
+
         return View(settings);
     }
 
@@ -41,12 +46,18 @@ public class SettingsController : Controller
                 existing.CrawlIntervalHours = settings.CrawlIntervalHours;
                 existing.SoldKeywords = settings.SoldKeywords;
                 existing.UnderOptionKeywords = settings.UnderOptionKeywords;
+                existing.PreferredTimezone = settings.PreferredTimezone;
                 _context.Update(existing);
             }
             await _context.SaveChangesAsync();
             TempData["Success"] = "Settings updated successfully!";
             return RedirectToAction(nameof(Index));
         }
+
+        ViewBag.Timezones = TimeZoneInfo.GetSystemTimeZones()
+            .OrderBy(tz => tz.DisplayName)
+            .ToList();
+
         return View("Index", settings);
     }
 }

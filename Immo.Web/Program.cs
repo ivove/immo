@@ -29,6 +29,8 @@ builder.Services.AddDbContext<ImmoContext>(options =>
     options.UseSqlite($"Data Source={dbPath}");
 });
 
+builder.Services.AddScoped<Immo.Web.Services.TimezoneService>();
+
 var app = builder.Build();
 
 // Automatically apply any pending migrations on startup

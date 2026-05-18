@@ -117,7 +117,7 @@
                                 <div class="d-flex align-items-center justify-content-end gap-2">
                                     @if (item.CrawlRequestedAt.HasValue)
                                     {
-                                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle" title="Crawl queued at @item.CrawlRequestedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")">
+                                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle" title="Crawl queued at @TimezoneService.FormatToString(item.CrawlRequestedAt)">
                                             <i class="bi bi-hourglass-split me-1"></i> Pending
                                         </span>
                                     }

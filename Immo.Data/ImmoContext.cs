@@ -63,7 +63,8 @@ public class ImmoContext : DbContext
             RecrawlAfterDays = 3,
             CrawlIntervalHours = 4,
             SoldKeywords = "verkocht,sold",
-            UnderOptionKeywords = "onder optie,optie"
+            UnderOptionKeywords = "onder optie,optie",
+            PreferredTimezone = "UTC"
         });
     }
 }

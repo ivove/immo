@@ -25,6 +25,12 @@ public class AppSettings
     /// </summary>
     public string UnderOptionKeywords { get; set; } = "onder optie,optie";
 
+    /// <summary>
+    /// Preferred timezone for displaying dates and times across the system.
+    /// Defaults to UTC.
+    /// </summary>
+    public string PreferredTimezone { get; set; } = "UTC";
+
     // --------------- Helpers ---------------
 
     public IEnumerable<string> GetSoldKeywords() =>
