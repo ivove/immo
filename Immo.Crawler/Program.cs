@@ -21,7 +21,11 @@ Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Override("Immo", LogEventLevel.Information)
     .Enrich.FromLogContext()
     .WriteTo.Console()
-    .WriteTo.SQLite(sqliteDbPath: dbPath, tableName: "Logs")
+    .WriteTo.SQLite(
+        sqliteDbPath: dbPath, 
+        tableName: "Logs",
+        rollOver: false,
+        retentionPeriod: TimeSpan.FromDays(30))
     .CreateLogger();
 
 builder.Logging.ClearProviders();
