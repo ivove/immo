@@ -26,7 +26,7 @@ public class ConfigurableParserStrategy : IParserStrategy
         ParserConfig? config = null;
         if (page.AgencyId.HasValue)
         {
-            config = _context.ParserConfigs.FirstOrDefault(c => c.AgencyId == page.AgencyId.Value);
+            config = _context.ParserConfigs.Include(c => c.Agency).FirstOrDefault(c => c.AgencyId == page.AgencyId.Value);
         }
 
         if (config == null)
