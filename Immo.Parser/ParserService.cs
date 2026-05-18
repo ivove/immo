@@ -59,12 +59,15 @@ public class ParserService
                         existingProperty.Sold = property.Sold;
                         existingProperty.UnderOption = property.UnderOption;
                         existingProperty.AgencyId = page.AgencyId;
+                        existingProperty.LastUpdatedAt = DateTime.UtcNow;
                         _logger.LogInformation("Successfully updated property from {Url}", page.Url);
                     }
                     else
                     {
                         property.RawPageId = page.Id;
                         property.AgencyId = page.AgencyId;
+                        property.CreatedAt = DateTime.UtcNow;
+                        property.LastUpdatedAt = DateTime.UtcNow;
                         _context.Properties.Add(property);
                         _logger.LogInformation("Successfully parsed new property from {Url}", page.Url);
                     }

@@ -25,4 +25,7 @@ public class Property
     
     public int? AgencyId { get; set; }
     public Agency? Agency { get; set; }
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime LastUpdatedAt { get; set; } = DateTime.UtcNow;
 }

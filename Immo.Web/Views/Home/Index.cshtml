@@ -246,6 +246,15 @@
                             }
                         </div>
                         
+                        <div class="d-flex justify-content-between align-items-center text-muted small mb-3 border-top pt-3 mt-3">
+                            <span title="Added on @TimezoneService.FormatToString(property.CreatedAt)">
+                                <i class="bi bi-calendar-plus me-1 text-primary-emphasis"></i> Added: @TimezoneService.FormatToString(property.CreatedAt, "yyyy-MM-dd")
+                            </span>
+                            <span title="Last updated on @TimezoneService.FormatToString(property.LastUpdatedAt)">
+                                <i class="bi bi-clock-history me-1 text-success-emphasis"></i> Updated: @TimezoneService.FormatToString(property.LastUpdatedAt, "yyyy-MM-dd")
+                            </span>
+                        </div>
+                        
                         <a href="@property.SourceUrl" target="_blank" class="btn btn-outline-primary rounded-pill w-100 fw-semibold property-btn mt-auto">
                             View Details <i class="bi bi-arrow-right ms-2 transition-transform"></i>
                         </a>
