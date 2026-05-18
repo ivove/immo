@@ -72,6 +72,21 @@
 
                         <div class="mb-5">
                             <h5 class="fw-bold mb-3 text-dark">
+                                <i class="bi bi-star-fill text-warning me-2"></i> Recency Highlights
+                            </h5>
+                            <div class="bg-light p-4 rounded-4">
+                                <label asp-for="NewOrUpdatedThresholdDays" class="form-label fw-semibold">New/Updated Highlight Threshold (Days)</label>
+                                <div class="input-group">
+                                    <input asp-for="NewOrUpdatedThresholdDays" type="number" class="form-control form-control-lg border-0 shadow-none" min="1" max="90" />
+                                    <span class="input-group-text bg-white border-0 text-muted">days</span>
+                                </div>
+                                <div class="form-text mt-2">Properties added or updated within this number of days will be highlighted with dynamic badges in the property listings.</div>
+                                <span asp-validation-for="NewOrUpdatedThresholdDays" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="mb-5">
+                            <h5 class="fw-bold mb-3 text-dark">
                                 <i class="bi bi-tag-fill text-danger me-2"></i> Sold Keywords
                             </h5>
                             <div class="bg-light p-4 rounded-4">

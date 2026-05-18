@@ -47,6 +47,7 @@ public class SettingsController : Controller
                 existing.SoldKeywords = settings.SoldKeywords;
                 existing.UnderOptionKeywords = settings.UnderOptionKeywords;
                 existing.PreferredTimezone = settings.PreferredTimezone;
+                existing.NewOrUpdatedThresholdDays = settings.NewOrUpdatedThresholdDays;
                 _context.Update(existing);
             }
             await _context.SaveChangesAsync();

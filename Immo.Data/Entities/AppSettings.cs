@@ -31,6 +31,11 @@ public class AppSettings
     /// </summary>
     public string PreferredTimezone { get; set; } = "UTC";
 
+    /// <summary>
+    /// The threshold in days during which a property is highlighted as "New" or "Updated".
+    /// </summary>
+    public int NewOrUpdatedThresholdDays { get; set; } = 3;
+
     // --------------- Helpers ---------------
 
     public IEnumerable<string> GetSoldKeywords() =>

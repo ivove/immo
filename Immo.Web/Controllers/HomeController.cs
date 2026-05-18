@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Immo.Web.Models;
 using Immo.Data;
+using Immo.Data.Entities;
 
 namespace Immo.Web.Controllers;
 
@@ -22,8 +23,13 @@ public class HomeController : Controller
         double? minLivingArea, 
         double? minPlotArea,
         string? maxEpc,
-        string? status = "available")
+        string? status = "available",
+        string? recency = null)
     {
+        var settings = await _context.AppSettings.FirstOrDefaultAsync() ?? new AppSettings();
+        var thresholdDays = settings.NewOrUpdatedThresholdDays;
+        var thresholdDate = DateTime.UtcNow.AddDays(-thresholdDays);
+
         var query = _context.Properties.AsQueryable();
 
         // Status Filtering
@@ -38,6 +44,20 @@ public class HomeController : Controller
         else if (status == "under_option")
         {
             query = query.Where(p => p.UnderOption);
+        }
+
+        // Recency Filtering
+        if (recency == "new")
+        {
+            query = query.Where(p => p.CreatedAt >= thresholdDate);
+        }
+        else if (recency == "updated")
+        {
+            query = query.Where(p => p.LastUpdatedAt >= thresholdDate && p.CreatedAt < thresholdDate);
+        }
+        else if (recency == "new_or_updated")
+        {
+            query = query.Where(p => p.CreatedAt >= thresholdDate || p.LastUpdatedAt >= thresholdDate);
         }
 
         if (minPrice.HasValue) query = query.Where(p => p.Price >= minPrice.Value);
@@ -90,6 +110,8 @@ public class HomeController : Controller
         ViewBag.MinPlotArea = minPlotArea;
         ViewBag.MaxEpc = maxEpc;
         ViewBag.Status = status;
+        ViewBag.Recency = recency;
+        ViewBag.ThresholdDays = thresholdDays;
 
         return View(properties);
     }

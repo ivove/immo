@@ -118,6 +118,15 @@
                         <option value="under_option" selected="@(ViewBag.Status == "under_option")">Under Option</option>
                     </select>
                 </div>
+                <div class="col-md-3 col-lg-2">
+                    <label class="form-label fw-bold small text-muted text-uppercase">Recency</label>
+                    <select name="recency" class="form-select">
+                        <option value="" selected="@(string.IsNullOrEmpty(ViewBag.Recency))">Any time</option>
+                        <option value="new" selected="@(ViewBag.Recency == "new")">New (&lt; @ViewBag.ThresholdDays days)</option>
+                        <option value="updated" selected="@(ViewBag.Recency == "updated")">Updated (&lt; @ViewBag.ThresholdDays days)</option>
+                        <option value="new_or_updated" selected="@(ViewBag.Recency == "new_or_updated")">New/Updated</option>
+                    </select>
+                </div>
                 <div class="col-md-12 col-lg-2">
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary w-100 fw-bold">
@@ -162,6 +171,10 @@
 
         @foreach (var property in Model)
         {
+            var thresholdDays = ViewBag.ThresholdDays as int? ?? 3;
+            var isNew = (DateTime.UtcNow - property.CreatedAt).TotalDays <= thresholdDays;
+            var isUpdated = !isNew && (DateTime.UtcNow - property.LastUpdatedAt).TotalDays <= thresholdDays;
+
             <div class="col">
                 <div class="card h-100 property-card border-0 rounded-4 shadow-sm overflow-hidden bg-white">
                     <div class="position-relative property-img-wrapper">
@@ -176,6 +189,18 @@
                             </div>
                         }
                         <div class="position-absolute top-0 end-0 p-3 d-flex flex-column gap-2 align-items-end">
+                            @if (isNew)
+                            {
+                                <span class="badge bg-success text-white rounded-pill px-3 py-2 fw-bold shadow-sm animate-pulse-slow">
+                                    <i class="bi bi-stars me-1"></i> NEW
+                                </span>
+                            }
+                            else if (isUpdated)
+                            {
+                                <span class="badge bg-info text-dark rounded-pill px-3 py-2 fw-bold shadow-sm">
+                                    <i class="bi bi-lightning-charge-fill me-1"></i> UPDATED
+                                </span>
+                            }
                             @if (property.Sold)
                             {
                                 <span class="badge bg-danger text-white rounded-pill px-3 py-2 fw-bold shadow-sm">
@@ -267,6 +292,14 @@
 
 <style>
     /* Adding some specific inline styles for things not easily done in site.css */
+    .animate-pulse-slow {
+        animation: pulse-slow 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @@keyframes pulse-slow {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: .85; transform: scale(1.05); }
+    }
+
     .text-truncate-2 {
         display: -webkit-box;
         -webkit-line-clamp: 2;
