@@ -1,4 +1,5 @@
 using Immo.Data;
+using Immo.Data.Entities;
 using HtmlAgilityPack;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
@@ -43,6 +44,44 @@ public class ParserService
                     var existingProperty = await _context.Properties.FirstOrDefaultAsync(p => p.RawPageId == page.Id);
                     if (existingProperty != null)
                     {
+                        // Track changes before updating fields
+                        var now = DateTime.UtcNow;
+                        var changes = new List<PropertyHistory>();
+
+                        void CheckChange<T>(string fieldName, T oldValue, T newValue)
+                        {
+                            if (!EqualityComparer<T>.Default.Equals(oldValue, newValue))
+                            {
+                                changes.Add(new PropertyHistory
+                                {
+                                    PropertyId = existingProperty.Id,
+                                    Field = fieldName,
+                                    OldValue = oldValue?.ToString(),
+                                    NewValue = newValue?.ToString(),
+                                    ChangedAt = now
+                                });
+                            }
+                        }
+
+                        CheckChange("Title", existingProperty.Title, property.Title);
+                        CheckChange("Description", existingProperty.Description, property.Description);
+                        CheckChange("Price", existingProperty.Price, property.Price);
+                        CheckChange("ZipCode", existingProperty.ZipCode, property.ZipCode);
+                        CheckChange("City", existingProperty.City, property.City);
+                        CheckChange("Bedrooms", existingProperty.Bedrooms, property.Bedrooms);
+                        CheckChange("LivingArea", existingProperty.LivingArea, property.LivingArea);
+                        CheckChange("PlotArea", existingProperty.PlotArea, property.PlotArea);
+                        CheckChange("ImageUrl", existingProperty.ImageUrl, property.ImageUrl);
+                        CheckChange("EpcScore", existingProperty.EpcScore, property.EpcScore);
+                        CheckChange("Sold", existingProperty.Sold, property.Sold);
+                        CheckChange("UnderOption", existingProperty.UnderOption, property.UnderOption);
+
+                        if (changes.Any())
+                        {
+                            _context.PropertyHistories.AddRange(changes);
+                            _logger.LogInformation("Recorded {Count} changes for property {PropertyId}", changes.Count, existingProperty.Id);
+                        }
+
                         // Update existing property fields
                         existingProperty.Title = property.Title;
                         existingProperty.Description = property.Description;

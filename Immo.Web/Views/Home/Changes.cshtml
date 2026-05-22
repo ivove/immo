@@ -1,0 +1,350 @@
+@model IEnumerable<Immo.Data.Entities.PropertyHistory>
+
+@{
+    var property = ViewBag.Property as Immo.Data.Entities.Property;
+    ViewData["Title"] = $"History - {property?.Title ?? "Property Details"}";
+
+    string GetEpcClass(string? epc) {
+        if (string.IsNullOrEmpty(epc)) return "bg-light text-secondary";
+        var s = epc.ToUpper().Trim();
+        if (s.StartsWith("A")) return "epc-a text-white";
+        if (s.StartsWith("B")) return "epc-b text-white";
+        if (s.StartsWith("C")) return "epc-c text-dark";
+        if (s.StartsWith("D")) return "epc-d text-dark";
+        if (s.StartsWith("E")) return "epc-e text-white";
+        if (s.StartsWith("F") || s.StartsWith("G")) return "epc-f text-white";
+        return "bg-light text-secondary";
+    }
+
+    string FormatValue(string field, string? value) {
+        if (string.IsNullOrEmpty(value)) return "Not specified";
+        if (field == "Price" && decimal.TryParse(value, out var d)) return $"€ {d:N0}";
+        if (field == "Sold" || field == "UnderOption") return value == "True" ? "Yes" : "No";
+        if (field == "LivingArea" || field == "PlotArea") return $"{value} m²";
+        return value;
+    }
+
+    string GetFieldIcon(string field) {
+        return field switch {
+            "Price" => "bi-tag-fill",
+            "Sold" => "bi-check-circle-fill",
+            "UnderOption" => "bi-hourglass-split",
+            "Title" => "bi-type",
+            "Description" => "bi-text-paragraph",
+            "EpcScore" => "bi-lightning-charge-fill",
+            "ZipCode" => "bi-geo-alt-fill",
+            "City" => "bi-building",
+            "Bedrooms" => "bi-door-closed",
+            "LivingArea" => "bi-arrows-fullscreen",
+            "PlotArea" => "bi-tree",
+            "ImageUrl" => "bi-image",
+            _ => "bi-pencil-fill"
+        };
+    }
+
+    string GetFieldColorClass(string field, string? oldValue, string? newValue) {
+        if (field == "Price" && decimal.TryParse(oldValue, out var oldPrice) && decimal.TryParse(newValue, out var newPrice)) {
+            return newPrice < oldPrice ? "border-success bg-success-subtle text-success-emphasis" : "border-danger bg-danger-subtle text-danger-emphasis";
+        }
+        if (field == "Sold") {
+            return newValue == "True" ? "border-danger bg-danger-subtle text-danger-emphasis" : "border-success bg-success-subtle text-success-emphasis";
+        }
+        if (field == "UnderOption") {
+            return newValue == "True" ? "border-warning bg-warning-subtle text-warning-emphasis" : "border-light-subtle bg-light text-dark";
+        }
+        return "border-light-subtle bg-white text-dark";
+    }
+}
+
+@if (property == null)
+{
+    <div class="container py-5 text-center">
+        <div class="alert alert-danger" role="alert">
+            Property not found.
+        </div>
+        <a href="@Url.Action("Index")" class="btn btn-primary mt-3">Back to Properties</a>
+    </div>
+}
+else
+{
+    <div class="container py-4">
+        <!-- Back navigation and title -->
+        <div class="d-flex align-items-center justify-content-between mb-4">
+            <a href="@Url.Action("Index")" class="btn btn-outline-secondary rounded-pill px-4">
+                <i class="bi bi-arrow-left me-2"></i> Back to Explorer
+            </a>
+            <span class="text-muted small">
+                ID: #@property.Id
+            </span>
+        </div>
+
+        <div class="row g-4">
+            <!-- Left Side: Property Overview Card -->
+            <div class="col-lg-4">
+                <div class="card border-0 shadow-lg rounded-4 overflow-hidden sticky-top" style="top: 2rem; z-index: 10;">
+                    <div class="position-relative" style="height: 220px;">
+                        @if (!string.IsNullOrEmpty(property.ImageUrl))
+                        {
+                            <img src="@property.ImageUrl" class="w-100 h-100 object-fit-cover" alt="@property.Title">
+                        }
+                        else
+                        {
+                            <div class="w-100 h-100 bg-secondary bg-opacity-10 d-flex align-items-center justify-content-center">
+                                <i class="bi bi-image text-muted opacity-25" style="font-size: 3rem;"></i>
+                            </div>
+                        }
+                        <div class="position-absolute top-0 end-0 p-3 d-flex flex-column gap-2 align-items-end">
+                            @if (property.Sold)
+                            {
+                                <span class="badge bg-danger text-white rounded-pill px-3 py-2 fw-bold shadow-sm">SOLD</span>
+                            }
+                            @if (property.UnderOption)
+                            {
+                                <span class="badge bg-warning text-dark rounded-pill px-3 py-2 fw-bold shadow-sm">UNDER OPTION</span>
+                            }
+                            @if (!property.Sold && !property.UnderOption)
+                            {
+                                <span class="badge bg-success text-white rounded-pill px-3 py-2 fw-bold shadow-sm">AVAILABLE</span>
+                            }
+                            <span class="badge bg-dark bg-opacity-75 text-white rounded-pill px-3 py-2 fw-semibold backdrop-blur">
+                                @property.SourceDomain
+                            </span>
+                        </div>
+                        @if (property.Price.HasValue)
+                        {
+                            <div class="position-absolute bottom-0 start-0 p-3 w-100 property-price-gradient">
+                                <h4 class="mb-0 text-white fw-bold">€ @property.Price.Value.ToString("N0")</h4>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold text-dark mb-3">@property.Title</h5>
+                        
+                        <div class="d-flex align-items-center text-muted mb-4 small">
+                            <i class="bi bi-geo-alt-fill text-primary me-2"></i>
+                            @(string.IsNullOrEmpty(property.City) ? "Location Unknown" : $"{property.ZipCode} {property.City}")
+                        </div>
+
+                        <div class="row g-2 mb-4">
+                            @if (property.Bedrooms.HasValue)
+                            {
+                                <div class="col-6">
+                                    <div class="bg-light rounded-3 p-2 text-center" title="Bedrooms">
+                                        <i class="bi bi-door-closed text-secondary d-block mb-1 fs-5"></i>
+                                        <span class="fw-semibold small">@property.Bedrooms Beds</span>
+                                    </div>
+                                </div>
+                            }
+                            @if (property.LivingArea.HasValue)
+                            {
+                                <div class="col-6">
+                                    <div class="bg-light rounded-3 p-2 text-center" title="Living Area">
+                                        <i class="bi bi-arrows-fullscreen text-secondary d-block mb-1 fs-5"></i>
+                                        <span class="fw-semibold small">@property.LivingArea m²</span>
+                                    </div>
+                                </div>
+                            }
+                            @if (property.PlotArea.HasValue)
+                            {
+                                <div class="col-6">
+                                    <div class="bg-light rounded-3 p-2 text-center" title="Plot Area">
+                                        <i class="bi bi-tree text-secondary d-block mb-1 fs-5"></i>
+                                        <span class="fw-semibold small">@property.PlotArea m²</span>
+                                    </div>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(property.EpcScore))
+                            {
+                                <div class="col-6">
+                                    <div class="rounded-3 p-2 text-center shadow-sm @GetEpcClass(property.EpcScore)" title="EPC Score">
+                                        <i class="bi bi-lightning-charge d-block mb-1 fs-5"></i>
+                                        <span class="fw-bold small">EPC @property.EpcScore</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="border-top pt-3 mb-3 small text-muted">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>First Crawled:</span>
+                                <span class="fw-medium">@TimezoneService.FormatToString(property.CreatedAt, "yyyy-MM-dd HH:mm")</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Last Verified:</span>
+                                <span class="fw-medium">@TimezoneService.FormatToString(property.LastUpdatedAt, "yyyy-MM-dd HH:mm")</span>
+                            </div>
+                        </div>
+
+                        <a href="@property.SourceUrl" target="_blank" class="btn btn-primary w-100 rounded-pill fw-semibold">
+                            View Original Listing <i class="bi bi-box-arrow-up-right ms-2"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Side: Change History Timeline -->
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-lg rounded-4 p-4 p-md-5 bg-white">
+                    <h3 class="fw-bold text-dark mb-2">Property Change Timeline</h3>
+                    <p class="text-muted mb-5">Track history and updates detected by the parser over time.</p>
+
+                    @if (!Model.Any())
+                    {
+                        <div class="text-center py-5">
+                            <div class="empty-state p-4 bg-light rounded-4">
+                                <i class="bi bi-clock-history display-4 text-muted mb-3 opacity-50"></i>
+                                <h5 class="fw-bold text-dark">No updates detected yet</h5>
+                                <p class="text-muted small mb-0">This property has not changed since it was first parsed.</p>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="timeline">
+                            @foreach (var entry in Model)
+                            {
+                                var age = DateTime.UtcNow - entry.ChangedAt;
+                                string ageText = "just now";
+                                if (age.TotalSeconds >= 60) {
+                                    if (age.TotalMinutes < 60) ageText = $"{(int)age.TotalMinutes}m ago";
+                                    else if (age.TotalHours < 24) ageText = $"{(int)age.TotalHours}h ago";
+                                    else ageText = $"{(int)age.TotalDays}d ago";
+                                }
+
+                                var colorClass = GetFieldColorClass(entry.Field, entry.OldValue, entry.NewValue);
+                                var iconClass = GetFieldIcon(entry.Field);
+
+                                <div class="timeline-item">
+                                    <div class="timeline-icon bg-white shadow-sm border border-secondary-subtle">
+                                        <i class="bi @iconClass text-primary"></i>
+                                    </div>
+                                    <div class="card @colorClass border-start border-4 rounded-3 shadow-sm p-3 mb-4 ms-2">
+                                        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                                            <h5 class="mb-0 fw-bold d-flex align-items-center">
+                                                @entry.Field
+                                                
+                                                @if (entry.Field == "Price" && decimal.TryParse(entry.OldValue, out var oldPrice) && decimal.TryParse(entry.NewValue, out var newPrice))
+                                                {
+                                                    var diff = newPrice - oldPrice;
+                                                    var pct = oldPrice > 0 ? (diff / oldPrice) * 100 : 0;
+                                                    if (diff < 0)
+                                                    {
+                                                        <span class="badge bg-success text-white rounded-pill ms-2 font-monospace small">
+                                                            <i class="bi bi-arrow-down-short"></i> € @Math.Abs(diff).ToString("N0") (@pct.ToString("F1")%)
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-danger text-white rounded-pill ms-2 font-monospace small">
+                                                            <i class="bi bi-arrow-up-short"></i> € @diff.ToString("N0") (+@pct.ToString("F1")%)
+                                                        </span>
+                                                    }
+                                                }
+                                            </h5>
+                                            <span class="text-muted small" title="UTC: @entry.ChangedAt.ToString("yyyy-MM-dd HH:mm:ss")">
+                                                <i class="bi bi-clock me-1"></i> @TimezoneService.FormatToString(entry.ChangedAt, "yyyy-MM-dd HH:mm") (@ageText)
+                                            </span>
+                                        </div>
+
+                                        <div class="row g-2 align-items-center">
+                                            <div class="col-md-5">
+                                                <div class="p-2 rounded bg-light border border-light-subtle text-muted text-decoration-line-through text-truncate">
+                                                    <span class="small d-block text-uppercase fw-semibold opacity-75">Original Value</span>
+                                                    @FormatValue(entry.Field, entry.OldValue)
+                                                </div>
+                                            </div>
+                                            <div class="col-md-2 text-center text-muted py-1 py-md-0">
+                                                <i class="bi bi-arrow-right-circle-fill fs-4 text-secondary"></i>
+                                            </div>
+                                            <div class="col-md-5">
+                                                <div class="p-2 rounded bg-white border border-secondary-subtle fw-semibold text-dark text-truncate shadow-xs">
+                                                    <span class="small d-block text-uppercase fw-normal text-muted opacity-75">New Value</span>
+                                                    @FormatValue(entry.Field, entry.NewValue)
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        @if (entry.Field == "Description" && !string.IsNullOrEmpty(entry.OldValue) && !string.IsNullOrEmpty(entry.NewValue))
+                                        {
+                                            <div class="mt-3">
+                                                <button class="btn btn-sm btn-link text-decoration-none p-0 fw-semibold text-primary" type="button" data-bs-toggle="collapse" data-bs-target="#descDiff-@entry.Id">
+                                                    Show Description Comparison <i class="bi bi-chevron-down ms-1"></i>
+                                                </button>
+                                                <div class="collapse mt-2" id="descDiff-@entry.Id">
+                                                    <div class="p-3 rounded bg-light border text-muted small whitespace-pre-wrap max-h-300 overflow-y-auto">
+                                                        <div class="mb-3 border-bottom pb-2">
+                                                            <strong class="d-block text-danger mb-1"><i class="bi bi-dash-circle me-1"></i> Old:</strong>
+                                                            @entry.OldValue
+                                                        </div>
+                                                        <div>
+                                                            <strong class="d-block text-success mb-1"><i class="bi bi-plus-circle me-1"></i> New:</strong>
+                                                            @entry.NewValue
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    /* Styling for the timeline component */
+    .timeline {
+        position: relative;
+        padding-left: 2.2rem;
+        border-left: 2px solid #e9ecef;
+        margin-left: 1.2rem;
+    }
+    .timeline-item {
+        position: relative;
+    }
+    .timeline-icon {
+        position: absolute;
+        left: -3.3rem;
+        top: 0.2rem;
+        width: 2.2rem;
+        height: 2.2rem;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1;
+    }
+    .backdrop-blur {
+        backdrop-filter: blur(8px);
+    }
+    .object-fit-cover {
+        object-fit: cover;
+    }
+    .whitespace-pre-wrap {
+        white-space: pre-wrap;
+    }
+    .max-h-300 {
+        max-height: 300px;
+    }
+    .overflow-y-auto {
+        overflow-y: auto;
+    }
+    
+    /* EPC Rating Colors */
+    .epc-a { background-color: #2e7d32 !important; }
+    .epc-b { background-color: #4caf50 !important; }
+    .epc-c { background-color: #cddc39 !important; }
+    .epc-d { background-color: #ffeb3b !important; }
+    .epc-e { background-color: #ff9800 !important; }
+    .epc-f { background-color: #d32f2f !important; }
+
+    /* Price overlay gradient */
+    .property-price-gradient {
+        background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
+    }
+</style>

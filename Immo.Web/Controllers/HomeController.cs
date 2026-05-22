@@ -121,6 +121,26 @@ public class HomeController : Controller
         return View(properties);
     }
 
+    public async Task<IActionResult> Changes(int id)
+    {
+        var property = await _context.Properties
+            .Include(p => p.Agency)
+            .FirstOrDefaultAsync(p => p.Id == id);
+
+        if (property == null)
+        {
+            return NotFound();
+        }
+
+        var history = await _context.PropertyHistories
+            .Where(h => h.PropertyId == id)
+            .OrderByDescending(h => h.ChangedAt)
+            .ToListAsync();
+
+        ViewBag.Property = property;
+        return View(history);
+    }
+
     public IActionResult Privacy()
     {
         return View();

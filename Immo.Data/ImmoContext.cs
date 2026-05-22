@@ -18,6 +18,7 @@ public class ImmoContext : DbContext
     public DbSet<Agency> Agencies { get; set; }
     public DbSet<AgencyListingCheck> AgencyListingChecks { get; set; }
     public DbSet<Property> Properties { get; set; }
+    public DbSet<PropertyHistory> PropertyHistories { get; set; }
     public DbSet<ParserConfig> ParserConfigs { get; set; }
     public DbSet<AppSettings> AppSettings { get; set; }
     public DbSet<LogEntry> Logs { get; set; }
@@ -55,6 +56,12 @@ public class ImmoContext : DbContext
             .WithOne(p => p.Agency)
             .HasForeignKey(p => p.AgencyId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<Property>()
+            .HasMany<PropertyHistory>()
+            .WithOne(h => h.Property)
+            .HasForeignKey(h => h.PropertyId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         // Seed default settings row
         modelBuilder.Entity<AppSettings>().HasData(new AppSettings

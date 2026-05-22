@@ -280,9 +280,14 @@
                             </span>
                         </div>
                         
-                        <a href="@property.SourceUrl" target="_blank" class="btn btn-outline-primary rounded-pill w-100 fw-semibold property-btn mt-auto">
-                            View Details <i class="bi bi-arrow-right ms-2 transition-transform"></i>
-                        </a>
+                        <div class="d-flex gap-2 mt-auto">
+                            <a href="@Url.Action("Changes", "Home", new { id = property.Id })" class="btn btn-outline-secondary rounded-pill fw-semibold property-btn flex-grow-1">
+                                <i class="bi bi-clock-history me-1"></i> History
+                            </a>
+                            <a href="@property.SourceUrl" target="_blank" class="btn btn-outline-primary rounded-pill fw-semibold property-btn flex-grow-1">
+                                View Details <i class="bi bi-arrow-right ms-2 transition-transform"></i>
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
