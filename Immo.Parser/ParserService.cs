@@ -3,6 +3,8 @@ using Immo.Data.Entities;
 using HtmlAgilityPack;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
+using System.Net;
+using System.Net.Mail;
 
 namespace Immo.Parser;
 
@@ -17,6 +19,100 @@ public class ParserService
         _context = context;
         _strategies = strategies;
         _logger = logger;
+    }
+
+    // ----- Email notification for search results -----
+    public async Task<bool> SendSearchResultsByEmailAsync(Immo.Parser.Models.SearchFilter filter, string recipientEmail)
+    {
+        if (string.IsNullOrWhiteSpace(recipientEmail)) return false;
+
+        var settings = await _context.AppSettings.FirstOrDefaultAsync() ?? new AppSettings();
+        if (string.IsNullOrWhiteSpace(settings.SmtpHost) || string.IsNullOrWhiteSpace(settings.FromEmail))
+        {
+            _logger.LogWarning("SMTP settings not configured - cannot send email to {Recipient}", recipientEmail);
+            return false;
+        }
+
+        // Build base query
+        var thresholdDays = settings.NewOrUpdatedThresholdDays;
+        var thresholdDate = DateTime.UtcNow.AddDays(-thresholdDays);
+
+        var query = _context.Properties.AsQueryable();
+
+        // Status
+        if (filter.Status == "available") query = query.Where(p => !p.Sold && !p.UnderOption);
+        else if (filter.Status == "sold") query = query.Where(p => p.Sold);
+        else if (filter.Status == "under_option") query = query.Where(p => p.UnderOption);
+
+        // Recency
+        if (filter.Recency == "new") query = query.Where(p => p.CreatedAt >= thresholdDate);
+        else if (filter.Recency == "updated") query = query.Where(p => p.LastUpdatedAt >= thresholdDate && p.CreatedAt < thresholdDate);
+        else if (filter.Recency == "new_or_updated") query = query.Where(p => p.CreatedAt >= thresholdDate || p.LastUpdatedAt >= thresholdDate);
+
+        if (filter.MinPrice.HasValue) query = query.Where(p => p.Price >= filter.MinPrice.Value);
+        if (filter.MaxPrice.HasValue) query = query.Where(p => p.Price <= filter.MaxPrice.Value);
+        if (filter.ZipCodes != null && filter.ZipCodes.Any()) query = query.Where(p => p.ZipCode != null && filter.ZipCodes.Contains(p.ZipCode));
+        if (filter.MinBedrooms.HasValue) query = query.Where(p => p.Bedrooms >= filter.MinBedrooms.Value);
+        if (filter.MinLivingArea.HasValue) query = query.Where(p => p.LivingArea >= filter.MinLivingArea.Value);
+        if (filter.MinPlotArea.HasValue) query = query.Where(p => p.PlotArea >= filter.MinPlotArea.Value);
+
+        if (!string.IsNullOrEmpty(filter.MaxEpc))
+        {
+            var epcGrades = new List<string> { "A","B","C","D","E","F","G" };
+            var maxIndex = epcGrades.IndexOf(filter.MaxEpc.ToUpper());
+            if (maxIndex != -1)
+            {
+                var allowed = epcGrades.Take(maxIndex + 1).ToList();
+                query = query.Where(p => p.EpcScore != null && allowed.Contains(p.EpcScore.Substring(0,1).ToUpper()));
+            }
+        }
+
+        var properties = await query.OrderByDescending(p => p.Id).ToListAsync();
+        if (!properties.Any())
+        {
+            _logger.LogInformation("No properties match the provided filter; email not sent.");
+            return false;
+        }
+
+        // Build HTML body
+        var html = "<h3>Search results</h3><ul>";
+        foreach (var p in properties)
+        {
+            var price = p.Price.HasValue ? p.Price.Value.ToString("N0") : "N/A";
+            html += $"<li><strong>{System.Net.WebUtility.HtmlEncode(p.Title)}</strong> - {System.Net.WebUtility.HtmlEncode(p.ZipCode + " " + p.City)} - € {price} - <a href='{System.Net.WebUtility.HtmlEncode(p.SourceUrl)}'>details</a></li>";
+        }
+        html += "</ul>";
+
+        try
+        {
+            using var client = new SmtpClient(settings.SmtpHost, settings.SmtpPort)
+            {
+                EnableSsl = settings.SmtpUseSsl
+            };
+
+            if (!string.IsNullOrEmpty(settings.SmtpUsername))
+            {
+                client.Credentials = new NetworkCredential(settings.SmtpUsername, settings.SmtpPassword);
+            }
+
+            var mail = new MailMessage
+            {
+                From = new MailAddress(settings.FromEmail),
+                Subject = $"Immo: {properties.Count} properties matching your filter",
+                Body = html,
+                IsBodyHtml = true
+            };
+            mail.To.Add(recipientEmail);
+
+            await client.SendMailAsync(mail);
+            _logger.LogInformation("Sent search results email to {Recipient} ({Count} properties)", recipientEmail, properties.Count);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send search results email to {Recipient}", recipientEmail);
+            return false;
+        }
     }
 
     public async Task ParsePendingPagesAsync()
