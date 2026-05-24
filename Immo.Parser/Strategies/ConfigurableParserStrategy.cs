@@ -143,7 +143,15 @@ public class ConfigurableParserStrategy : IParserStrategy
         if (string.IsNullOrEmpty(imageUrl))
         {
             var ogImage = document.DocumentNode.SelectSingleNode("//meta[@property='og:image']");
-            imageUrl = ogImage?.GetAttributeValue("content", null);
+            var ogUrl = ogImage?.GetAttributeValue("content", null);
+            if (!string.IsNullOrEmpty(ogUrl))
+            {
+                imageUrl = HtmlEntity.DeEntitize(ogUrl);
+                if (!imageUrl.StartsWith("http"))
+                {
+                    imageUrl = new Uri(new Uri(page.Url), imageUrl).ToString();
+                }
+            }
         }
 
         var settings = _context.AppSettings.FirstOrDefault() ?? new AppSettings();
@@ -236,9 +244,13 @@ public class ConfigurableParserStrategy : IParserStrategy
             ? node.GetAttributeValue("content", null) 
             : node.GetAttributeValue("src", null);
 
-        if (!string.IsNullOrEmpty(url) && !url.StartsWith("http"))
+        if (!string.IsNullOrEmpty(url))
         {
-            url = new Uri(new Uri(baseUrl), url).ToString();
+            url = HtmlEntity.DeEntitize(url);
+            if (!url.StartsWith("http"))
+            {
+                url = new Uri(new Uri(baseUrl), url).ToString();
+            }
         }
         return url;
     }
