@@ -36,6 +36,38 @@ public class AppSettings
     /// </summary>
     public int NewOrUpdatedThresholdDays { get; set; } = 3;
 
+    // --------------- Email / SMTP settings ---------------
+
+    /// <summary>
+    /// SMTP host used for sending email notifications.
+    /// </summary>
+    public string SmtpHost { get; set; } = string.Empty;
+
+    /// <summary>
+    /// SMTP port.
+    /// </summary>
+    public int SmtpPort { get; set; } = 25;
+
+    /// <summary>
+    /// Username for SMTP authentication (optional).
+    /// </summary>
+    public string SmtpUsername { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Password for SMTP authentication (optional).
+    /// </summary>
+    public string SmtpPassword { get; set; } = string.Empty;
+
+    /// <summary>
+    /// From email address used when sending notifications.
+    /// </summary>
+    public string FromEmail { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Whether to use SSL/TLS for SMTP connections.
+    /// </summary>
+    public bool SmtpUseSsl { get; set; } = true;
+
     // --------------- Helpers ---------------
 
     public IEnumerable<string> GetSoldKeywords() =>

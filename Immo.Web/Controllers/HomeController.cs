@@ -11,11 +11,39 @@ public class HomeController : Controller
 {
     private readonly ImmoContext _context;
     private readonly ILogger<HomeController> _logger;
+    private readonly Immo.Web.Services.EmailService _emailService;
 
-    public HomeController(ImmoContext context, ILogger<HomeController> logger)
+    public HomeController(ImmoContext context, ILogger<HomeController> logger, Immo.Web.Services.EmailService emailService)
     {
         _context = context;
         _logger = logger;
+        _emailService = emailService;
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> SendPropertiesEmail([FromForm] string email, [FromForm] List<int> propertyIds)
+    {
+        if (string.IsNullOrWhiteSpace(email) || propertyIds == null || !propertyIds.Any())
+        {
+            return BadRequest("Missing recipient or properties");
+        }
+
+        var properties = await _context.Properties
+            .Where(p => propertyIds.Contains(p.Id))
+            .ToListAsync();
+
+        var html = "<h2>Properties you requested</h2><ul>";
+        foreach (var p in properties)
+        {
+            html += $"<li><strong>{System.Net.WebUtility.HtmlEncode(p.Title)}</strong> - {System.Net.WebUtility.HtmlEncode(p.ZipCode + " " + p.City)} - Price: { (p.Price.HasValue ? p.Price.Value.ToString("N0") : "N/A") } - <a href='{System.Net.WebUtility.HtmlEncode(p.SourceUrl)}'>Details</a></li>";
+        }
+        html += "</ul>";
+
+        var subject = $"Immo: {properties.Count} properties from your search";
+
+        var sent = await _emailService.SendPropertiesEmailAsync(email, subject, html);
+        if (!sent) return StatusCode(500, "Failed to send email");
+        return Ok(new { success = true });
     }
 
     public async Task<IActionResult> Index(

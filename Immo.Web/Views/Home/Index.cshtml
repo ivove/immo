@@ -416,4 +416,34 @@
         });
     });
 </script>
+
+<script>
+    async function sendSelectedPropertiesByEmail() {
+        const email = prompt('Enter recipient email address:');
+        if (!email) return;
+        const checks = document.querySelectorAll('.property-select-cb:checked');
+        if (!checks.length) { alert('Select at least one property'); return; }
+        const ids = Array.from(checks).map(c => c.value);
+
+        const form = new FormData();
+        form.append('email', email);
+        ids.forEach(id => form.append('propertyIds', id));
+
+        const resp = await fetch('@Url.Action("SendPropertiesEmail", "Home")', {
+            method: 'POST',
+            body: form
+        });
+        if (resp.ok) {
+            alert('Email sent successfully');
+        } else {
+            alert('Failed to send email');
+        }
+    }
+</script>
+
+<div style="position: fixed; right: 18px; bottom: 18px; z-index: 1200;">
+    <button class="btn btn-primary btn-lg rounded-circle shadow-lg" onclick="sendSelectedPropertiesByEmail()" title="Email selected properties">
+        <i class="bi bi-envelope-fill"></i>
+    </button>
+</div>
 }

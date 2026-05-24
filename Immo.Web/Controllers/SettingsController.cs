@@ -58,6 +58,13 @@ public class SettingsController : Controller
                 existing.UnderOptionKeywords = settings.UnderOptionKeywords;
                 existing.PreferredTimezone = settings.PreferredTimezone;
                 existing.NewOrUpdatedThresholdDays = settings.NewOrUpdatedThresholdDays;
+                // SMTP / Email
+                existing.SmtpHost = settings.SmtpHost;
+                existing.SmtpPort = settings.SmtpPort;
+                existing.SmtpUsername = settings.SmtpUsername;
+                existing.SmtpPassword = settings.SmtpPassword;
+                existing.FromEmail = settings.FromEmail;
+                existing.SmtpUseSsl = settings.SmtpUseSsl;
                 _context.Update(existing);
             }
             await _context.SaveChangesAsync();

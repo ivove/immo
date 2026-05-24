@@ -73,6 +73,13 @@ public class ImmoContext : DbContext
             UnderOptionKeywords = "onder optie,optie",
             PreferredTimezone = "UTC",
             NewOrUpdatedThresholdDays = 3
+            ,
+            SmtpHost = "",
+            SmtpPort = 25,
+            SmtpUsername = "",
+            SmtpPassword = "",
+            FromEmail = "",
+            SmtpUseSsl = true
         });
     }
 }

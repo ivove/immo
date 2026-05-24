@@ -34,6 +34,7 @@ builder.Services.AddDbContext<ImmoContext>(options =>
 });
 
 builder.Services.AddScoped<Immo.Web.Services.TimezoneService>();
+builder.Services.AddScoped<Immo.Web.Services.EmailService>();
 
 var app = builder.Build();
 
