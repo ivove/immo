@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <!-- NETSDK1206: SQLitePCLRaw uses legacy win7 RIDs; no fix available until package is updated -->
+    <NoWarn>$(NoWarn);NETSDK1206</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- SQLitePCLRaw.lib.e_sqlite3 2.1.11 has GHSA-2m69-gcr7-jv3q; no patched version exists yet -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-2m69-gcr7-jv3q" />
+  </ItemGroup>
+</Project>
