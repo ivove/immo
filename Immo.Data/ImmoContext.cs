@@ -72,7 +72,7 @@ public class ImmoContext : DbContext
             SoldKeywords = "verkocht,sold",
             UnderOptionKeywords = "onder optie,optie",
             PreferredTimezone = "UTC",
-            NewOrUpdatedThresholdDays = 3
+            NewOrUpdatedThresholdDays = 7
             ,
             SmtpHost = "",
             SmtpPort = 25,

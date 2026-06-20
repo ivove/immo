@@ -4,10 +4,18 @@
     var agencyId = ViewBag.AgencyId as int?;
     var agencyDomain = ViewBag.AgencyDomain as string;
     var testedUrl = ViewBag.TestedUrl as string;
+    var dataSourceType = ViewBag.DataSourceType as string;
+    var isJsonApi = dataSourceType == "json_api";
+
+    // HTML mode
     var propertyLinks = ViewBag.PropertyLinks as List<string>;
     var paginationLinks = ViewBag.PaginationLinks as List<string>;
     var parsedProperty = ViewBag.ParsedProperty as Immo.Data.Entities.Property;
-    var rawHtmlLength = ViewBag.RawHtmlLength as int?;
+
+    // JSON API mode
+    var parsedProperties = ViewBag.ParsedProperties as List<Immo.Data.Entities.Property>;
+
+    var rawContentLength = ViewBag.RawHtmlLength as int?;
 }
 
 <div class="container py-4">
@@ -21,12 +29,18 @@
 
     <div class="card border-0 shadow-sm rounded-4 mb-4">
         <div class="card-body p-4">
-            <h2 class="fw-bold mb-4">Debug Crawler - @agencyDomain</h2>
-            
+            <div class="d-flex align-items-center gap-3 mb-4">
+                <h2 class="fw-bold mb-0">Debug Crawler - @agencyDomain</h2>
+                @if (isJsonApi)
+                {
+                    <span class="badge bg-info text-dark"><i class="bi bi-braces me-1"></i>JSON API Mode</span>
+                }
+            </div>
+
             <form asp-action="Debug" method="post">
                 <input type="hidden" name="agencyId" value="@agencyId" />
                 <div asp-validation-summary="All" class="text-danger mb-3"></div>
-                
+
                 <div class="input-group mb-3 input-group-lg">
                     <span class="input-group-text bg-light"><i class="bi bi-link-45deg"></i></span>
                     <input type="url" name="urlToTest" class="form-control" placeholder="https://..." value="@testedUrl" required />
@@ -35,7 +49,14 @@
                     </button>
                 </div>
                 <div class="form-text">
-                    Enter any URL from this agency. The debugger will attempt to extract property links, pagination links, and parse it as a single property.
+                    @if (isJsonApi)
+                    {
+                        <span>Enter the JSON API listing URL. The debugger will fetch it and parse each item using your configured field paths.</span>
+                    }
+                    else
+                    {
+                        <span>Enter any URL from this agency. The debugger will attempt to extract property links, pagination links, and parse it as a single property.</span>
+                    }
                 </div>
             </form>
         </div>
@@ -43,107 +64,180 @@
 
     @if (testedUrl != null)
     {
-        <div class="row">
-            <div class="col-lg-12 mb-4">
-                <div class="alert alert-info border-0 shadow-sm">
-                    <i class="bi bi-info-circle-fill me-2"></i> Fetched HTML length: <strong>@rawHtmlLength bytes</strong>
+        <div class="alert alert-info border-0 shadow-sm mb-4">
+            <i class="bi bi-info-circle-fill me-2"></i> Fetched content length: <strong>@rawContentLength bytes</strong>
+        </div>
+
+        @if (isJsonApi)
+        {
+            <!-- JSON API results -->
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                    <h4 class="fw-bold mb-0 text-success"><i class="bi bi-braces me-2"></i>Parsed Properties</h4>
+                    <span class="badge bg-primary fs-6">@(parsedProperties?.Count ?? 0) items</span>
                 </div>
-            </div>
-
-            <div class="col-lg-6 mb-4">
-                <div class="card border-0 shadow-sm rounded-4 h-100">
-                    <div class="card-header bg-white border-bottom py-3">
-                        <h4 class="fw-bold mb-0 text-primary"><i class="bi bi-list-ul me-2"></i>Listing Rules Test</h4>
-                    </div>
-                    <div class="card-body p-4">
-                        <h5 class="fw-bold text-dark">Property Links Found: <span class="badge bg-primary">@(propertyLinks?.Count ?? 0)</span></h5>
-                        @if (propertyLinks != null && propertyLinks.Any())
-                        {
-                            <ul class="list-group list-group-flush border rounded mt-3" style="max-height: 250px; overflow-y: auto;">
-                                @foreach (var link in propertyLinks)
-                                {
-                                    <li class="list-group-item text-truncate" title="@link"><a href="@link" target="_blank">@link</a></li>
-                                }
-                            </ul>
-                        }
-                        else
-                        {
-                            <div class="text-muted fst-italic mt-2">No property links matched the AgencyListingChecks rules.</div>
-                        }
-
-                        <hr class="my-4" />
-
-                        <h5 class="fw-bold text-dark">Pagination Links Found: <span class="badge bg-info">@(paginationLinks?.Count ?? 0)</span></h5>
-                        @if (paginationLinks != null && paginationLinks.Any())
-                        {
-                            <ul class="list-group list-group-flush border rounded mt-3" style="max-height: 200px; overflow-y: auto;">
-                                @foreach (var link in paginationLinks)
-                                {
-                                    <li class="list-group-item text-truncate" title="@link"><a href="@link" target="_blank">@link</a></li>
-                                }
-                            </ul>
-                        }
-                        else
-                        {
-                            <div class="text-muted fst-italic mt-2">No pagination links found (check PaginationSelector).</div>
-                        }
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-6 mb-4">
-                <div class="card border-0 shadow-sm rounded-4 h-100">
-                    <div class="card-header bg-white border-bottom py-3">
-                        <h4 class="fw-bold mb-0 text-success"><i class="bi bi-file-earmark-text me-2"></i>Parser Strategy Test</h4>
-                    </div>
-                    <div class="card-body p-4">
-                        @if (parsedProperty != null && (!string.IsNullOrEmpty(parsedProperty.Title) || parsedProperty.Price.HasValue || !string.IsNullOrEmpty(parsedProperty.ExternalId)))
-                        {
-                            <div class="table-responsive">
-                                <table class="table table-bordered table-sm table-striped">
-                                    <tbody>
-                                        <tr><th style="width: 35%">Title</th><td>@parsedProperty.Title</td></tr>
-                                        <tr><th>Price</th><td>@parsedProperty.Price</td></tr>
-                                        <tr><th>Reference / External ID</th><td>@parsedProperty.ExternalId</td></tr>
-                                        <tr><th>Address</th><td>@parsedProperty.ZipCode @parsedProperty.City</td></tr>
-                                        <tr><th>Bedrooms</th><td>@parsedProperty.Bedrooms</td></tr>
-                                        <tr><th>Living Area</th><td>@parsedProperty.LivingArea</td></tr>
-                                        <tr><th>Plot Area</th><td>@parsedProperty.PlotArea</td></tr>
-                                        <tr><th>EPC Score</th><td>@parsedProperty.EpcScore</td></tr>
-                                        <tr><th>Status</th>
+                <div class="card-body p-4">
+                    @if (parsedProperties == null || !parsedProperties.Any())
+                    {
+                        <div class="alert alert-warning mb-0 border-0">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            No properties parsed. Check that the JSON response is valid and your field paths (especially <strong>Items Array Path</strong>) are correct.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-sm table-striped align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>External ID</th>
+                                        <th>Title</th>
+                                        <th>Price</th>
+                                        <th>Location</th>
+                                        <th>Beds</th>
+                                        <th>Living m²</th>
+                                        <th>EPC</th>
+                                        <th>Status</th>
+                                        <th>Image</th>
+                                        <th>URL</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var p in parsedProperties)
+                                    {
+                                        <tr>
+                                            <td class="text-muted small">@p.ExternalId</td>
+                                            <td>@p.Title</td>
+                                            <td>@(p.Price.HasValue ? $"€ {p.Price:N0}" : "-")</td>
+                                            <td>@p.ZipCode @p.City</td>
+                                            <td>@p.Bedrooms</td>
+                                            <td>@p.LivingArea</td>
+                                            <td>@p.EpcScore</td>
                                             <td>
-                                                @if (parsedProperty.Sold) { <span class="badge bg-danger">Sold</span> }
-                                                else if (parsedProperty.UnderOption) { <span class="badge bg-warning">Under Option</span> }
+                                                @if (p.Sold) { <span class="badge bg-danger">Sold</span> }
+                                                else if (p.UnderOption) { <span class="badge bg-warning">Under Option</span> }
                                                 else { <span class="badge bg-success">Available</span> }
                                             </td>
-                                        </tr>
-                                        <tr><th>Image URL</th>
-                                            <td class="text-truncate" style="max-width: 200px;" title="@parsedProperty.ImageUrl">
-                                                @if (!string.IsNullOrEmpty(parsedProperty.ImageUrl)) {
-                                                    <a href="@parsedProperty.ImageUrl" target="_blank">View Image</a>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(p.ImageUrl))
+                                                {
+                                                    <a href="@p.ImageUrl" target="_blank"><i class="bi bi-image"></i></a>
+                                                }
+                                            </td>
+                                            <td class="text-truncate" style="max-width:150px" title="@p.SourceUrl">
+                                                @if (!string.IsNullOrEmpty(p.SourceUrl))
+                                                {
+                                                    <a href="@p.SourceUrl" target="_blank" class="small">link</a>
                                                 }
                                             </td>
                                         </tr>
-                                        <tr><th>Description</th>
-                                            <td>
-                                                <div style="max-height: 100px; overflow-y: auto;" class="small text-muted border p-2 bg-light">
-                                                    @parsedProperty.Description
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="alert alert-warning mb-0 border-0 shadow-sm">
-                                <i class="bi bi-exclamation-triangle-fill me-2"></i> Parser extracted no meaningful data. This URL is likely not a property page, or the Parser Config is completely broken.
-                            </div>
-                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- HTML results -->
+            <div class="row">
+                <div class="col-lg-6 mb-4">
+                    <div class="card border-0 shadow-sm rounded-4 h-100">
+                        <div class="card-header bg-white border-bottom py-3">
+                            <h4 class="fw-bold mb-0 text-primary"><i class="bi bi-list-ul me-2"></i>Listing Rules Test</h4>
+                        </div>
+                        <div class="card-body p-4">
+                            <h5 class="fw-bold text-dark">Property Links Found: <span class="badge bg-primary">@(propertyLinks?.Count ?? 0)</span></h5>
+                            @if (propertyLinks != null && propertyLinks.Any())
+                            {
+                                <ul class="list-group list-group-flush border rounded mt-3" style="max-height: 250px; overflow-y: auto;">
+                                    @foreach (var link in propertyLinks)
+                                    {
+                                        <li class="list-group-item text-truncate" title="@link"><a href="@link" target="_blank">@link</a></li>
+                                    }
+                                </ul>
+                            }
+                            else
+                            {
+                                <div class="text-muted fst-italic mt-2">No property links matched the AgencyListingChecks rules.</div>
+                            }
+
+                            <hr class="my-4" />
+
+                            <h5 class="fw-bold text-dark">Pagination Links Found: <span class="badge bg-info">@(paginationLinks?.Count ?? 0)</span></h5>
+                            @if (paginationLinks != null && paginationLinks.Any())
+                            {
+                                <ul class="list-group list-group-flush border rounded mt-3" style="max-height: 200px; overflow-y: auto;">
+                                    @foreach (var link in paginationLinks)
+                                    {
+                                        <li class="list-group-item text-truncate" title="@link"><a href="@link" target="_blank">@link</a></li>
+                                    }
+                                </ul>
+                            }
+                            else
+                            {
+                                <div class="text-muted fst-italic mt-2">No pagination links found (check PaginationSelector).</div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6 mb-4">
+                    <div class="card border-0 shadow-sm rounded-4 h-100">
+                        <div class="card-header bg-white border-bottom py-3">
+                            <h4 class="fw-bold mb-0 text-success"><i class="bi bi-file-earmark-text me-2"></i>Parser Strategy Test</h4>
+                        </div>
+                        <div class="card-body p-4">
+                            @if (parsedProperty != null && (!string.IsNullOrEmpty(parsedProperty.Title) || parsedProperty.Price.HasValue || !string.IsNullOrEmpty(parsedProperty.ExternalId)))
+                            {
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-sm table-striped">
+                                        <tbody>
+                                            <tr><th style="width: 35%">Title</th><td>@parsedProperty.Title</td></tr>
+                                            <tr><th>Price</th><td>@parsedProperty.Price</td></tr>
+                                            <tr><th>Reference / External ID</th><td>@parsedProperty.ExternalId</td></tr>
+                                            <tr><th>Address</th><td>@parsedProperty.ZipCode @parsedProperty.City</td></tr>
+                                            <tr><th>Bedrooms</th><td>@parsedProperty.Bedrooms</td></tr>
+                                            <tr><th>Living Area</th><td>@parsedProperty.LivingArea</td></tr>
+                                            <tr><th>Plot Area</th><td>@parsedProperty.PlotArea</td></tr>
+                                            <tr><th>EPC Score</th><td>@parsedProperty.EpcScore</td></tr>
+                                            <tr><th>Status</th>
+                                                <td>
+                                                    @if (parsedProperty.Sold) { <span class="badge bg-danger">Sold</span> }
+                                                    else if (parsedProperty.UnderOption) { <span class="badge bg-warning">Under Option</span> }
+                                                    else { <span class="badge bg-success">Available</span> }
+                                                </td>
+                                            </tr>
+                                            <tr><th>Image URL</th>
+                                                <td class="text-truncate" style="max-width: 200px;" title="@parsedProperty.ImageUrl">
+                                                    @if (!string.IsNullOrEmpty(parsedProperty.ImageUrl)) {
+                                                        <a href="@parsedProperty.ImageUrl" target="_blank">View Image</a>
+                                                    }
+                                                </td>
+                                            </tr>
+                                            <tr><th>Description</th>
+                                                <td>
+                                                    <div style="max-height: 100px; overflow-y: auto;" class="small text-muted border p-2 bg-light">
+                                                        @parsedProperty.Description
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="alert alert-warning mb-0 border-0 shadow-sm">
+                                    <i class="bi bi-exclamation-triangle-fill me-2"></i> Parser extracted no meaningful data. This URL is likely not a property page, or the Parser Config is completely broken.
+                                </div>
+                            }
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        }
     }
 </div>

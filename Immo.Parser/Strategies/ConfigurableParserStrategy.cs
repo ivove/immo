@@ -17,11 +17,13 @@ public class ConfigurableParserStrategy : IParserStrategy
 
     public bool CanParse(string url)
     {
+        // JSON API pages are handled exclusively by JsonApiParserStrategy
+        if (url.StartsWith("json-api://", StringComparison.OrdinalIgnoreCase)) return false;
         var domain = new Uri(url).Host.Replace("www.", "");
         return _context.ParserConfigs.Any(c => c.Agency.AgencyDomain.Contains(domain));
     }
 
-    public Property Parse(RawPage page, HtmlDocument document)
+    public Property Parse(RawPage page, HtmlDocument? document)
     {
         ParserConfig? config = null;
         if (page.AgencyId.HasValue)

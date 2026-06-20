@@ -2,6 +2,7 @@
 
 @{
     ViewData["Title"] = "Parser Configuration";
+    var isJsonApi = ViewData["DataSourceType"]?.ToString() == "json_api";
 }
 
 <div class="container py-4">
@@ -15,151 +16,295 @@
 
     <div class="card border-0 shadow-sm rounded-4">
         <div class="card-body p-4">
-            <h2 class="fw-bold mb-4">Parser Configuration</h2>
-            
+            <div class="d-flex align-items-center gap-3 mb-4">
+                <h2 class="fw-bold mb-0">Parser Configuration</h2>
+                @if (isJsonApi)
+                {
+                    <span class="badge bg-info text-dark fs-6"><i class="bi bi-braces me-1"></i>JSON API Mode</span>
+                }
+                else
+                {
+                    <span class="badge bg-secondary fs-6"><i class="bi bi-file-earmark-code me-1"></i>HTML Mode</span>
+                }
+            </div>
+
             <form asp-action="EditParserConfig">
                 <input type="hidden" asp-for="Id" />
                 <input type="hidden" asp-for="AgencyId" />
                 <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
-                <div class="row g-4">
-                    <!-- General Selectors -->
-                    <div class="col-md-6">
-                        <h4 class="h5 fw-bold mb-3">Main Field Selectors (XPath)</h4>
-                        
-                        <div class="mb-3">
-                            <label asp-for="TitleSelector" class="form-label">Title Selector</label>
-                            <input asp-for="TitleSelector" class="form-control" placeholder="//h1" />
-                            <span asp-validation-for="TitleSelector" class="text-danger"></span>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label asp-for="PriceSelector" class="form-label">Price Selector</label>
-                            <input asp-for="PriceSelector" class="form-control" placeholder="//div[contains(class, 'price')]" />
-                            <span asp-validation-for="PriceSelector" class="text-danger"></span>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label asp-for="BedroomSelector" class="form-label">Bedroom Selector</label>
-                            <input asp-for="BedroomSelector" class="form-control" />
-                            <span asp-validation-for="BedroomSelector" class="text-danger"></span>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label asp-for="DescriptionSelector" class="form-label">Description Selector</label>
-                            <input asp-for="DescriptionSelector" class="form-control" />
-                            <span asp-validation-for="DescriptionSelector" class="text-danger"></span>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label asp-for="ImageSelector" class="form-label">Image Selector</label>
-                            <input asp-for="ImageSelector" class="form-control" />
-                            <span asp-validation-for="ImageSelector" class="text-danger"></span>
+                @if (isJsonApi)
+                {
+                    <!-- JSON API field paths -->
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <h4 class="h5 fw-bold mb-3">Array & Identity</h4>
+
+                            <div class="mb-3">
+                                <label asp-for="JsonArrayPath" class="form-label">Items Array Path</label>
+                                <input asp-for="JsonArrayPath" class="form-control" placeholder="data" />
+                                <div class="form-text">Dot-notation path to the array of items. Leave blank if the root is the array.</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="JsonUrlPath" class="form-label">Detail URL Path</label>
+                                <input asp-for="JsonUrlPath" class="form-control" placeholder="detailUrl" />
+                                <div class="form-text">Path to the property detail URL within each item.</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="JsonDetailUrlTemplate" class="form-label">Detail URL Template</label>
+                                <input asp-for="JsonDetailUrlTemplate" class="form-control" placeholder="https://agency.com/properties/{id}" />
+                                <div class="form-text">
+                                    Static URL template built from extracted field values. Takes priority over Detail URL Path.
+                                    Available placeholders: <code>{id}</code>, <code>{title}</code>, <code>{city}</code>, <code>{postalCode}</code>.
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="JsonExternalIdPath" class="form-label">External ID Path</label>
+                                <input asp-for="JsonExternalIdPath" class="form-control" placeholder="id" />
+                            </div>
+
+                            <hr class="my-3" />
+                            <h4 class="h5 fw-bold mb-3">Property Type Filter</h4>
+
+                            <div class="mb-3">
+                                <label asp-for="JsonTypeFilterPath" class="form-label">Type Field Path</label>
+                                <input asp-for="JsonTypeFilterPath" class="form-control" placeholder="type" />
+                                <div class="form-text">Dot-notation path to the field that holds the property type in each item.</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="JsonTypeFilterValues" class="form-label">Accepted Types</label>
+                                <input asp-for="JsonTypeFilterValues" class="form-control" placeholder="house,apartment" />
+                                <div class="form-text">Comma-separated list of accepted type values (case-insensitive). Leave blank to include all types.</div>
+                            </div>
+
+                            <hr class="my-3" />
+                            <h4 class="h5 fw-bold mb-3">Status Detection</h4>
+
+                            <div class="mb-3">
+                                <label asp-for="JsonStatusPath" class="form-label">Status Field Path</label>
+                                <input asp-for="JsonStatusPath" class="form-control" placeholder="status" />
+                                <div class="form-text">Path to the field that indicates the listing status.</div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label asp-for="JsonSoldValue" class="form-label">Sold Value</label>
+                                    <input asp-for="JsonSoldValue" class="form-control" placeholder="sold" />
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label asp-for="JsonUnderOptionValue" class="form-label">Under Option Value</label>
+                                    <input asp-for="JsonUnderOptionValue" class="form-control" placeholder="option" />
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label asp-for="AddressSelector" class="form-label">Address Selector</label>
-                            <input asp-for="AddressSelector" class="form-control" />
-                            <span asp-validation-for="AddressSelector" class="text-danger"></span>
-                        </div>
+                        <div class="col-md-6">
+                            <h4 class="h5 fw-bold mb-3">Field Paths</h4>
 
-                        <div class="mb-3">
-                            <label asp-for="ExternalIdPattern" class="form-label">External ID Pattern (Regex on URL)</label>
-                            <input asp-for="ExternalIdPattern" class="form-control" placeholder="/(\d+)$" />
-                            <span asp-validation-for="ExternalIdPattern" class="text-danger"></span>
+                            <div class="mb-3">
+                                <label asp-for="JsonTitlePath" class="form-label">Title</label>
+                                <input asp-for="JsonTitlePath" class="form-control" placeholder="title" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="JsonPricePath" class="form-label">Price</label>
+                                <input asp-for="JsonPricePath" class="form-control" placeholder="price.amount" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="JsonDescriptionPath" class="form-label">Description</label>
+                                <input asp-for="JsonDescriptionPath" class="form-control" placeholder="description" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="JsonImagePath" class="form-label">Image URL</label>
+                                <input asp-for="JsonImagePath" class="form-control" placeholder="photos[0].url" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="JsonBedroomsPath" class="form-label">Bedrooms</label>
+                                <input asp-for="JsonBedroomsPath" class="form-control" placeholder="specs.bedrooms" />
+                            </div>
+
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label asp-for="JsonLivingAreaPath" class="form-label">Living Area</label>
+                                    <input asp-for="JsonLivingAreaPath" class="form-control" placeholder="specs.livingArea" />
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label asp-for="JsonPlotAreaPath" class="form-label">Plot Area</label>
+                                    <input asp-for="JsonPlotAreaPath" class="form-control" placeholder="specs.plotArea" />
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="JsonEpcPath" class="form-label">EPC Score</label>
+                                <input asp-for="JsonEpcPath" class="form-control" placeholder="epc.score" />
+                            </div>
+
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label asp-for="JsonZipCodePath" class="form-label">Zip Code</label>
+                                    <input asp-for="JsonZipCodePath" class="form-control" placeholder="address.zip" />
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label asp-for="JsonCityPath" class="form-label">City</label>
+                                    <input asp-for="JsonCityPath" class="form-control" placeholder="address.city" />
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Spec Table Logic -->
-                    <div class="col-md-6">
-                        <h4 class="h5 fw-bold mb-3">Specification Table (Key-Value)</h4>
-                        
-                        <div class="mb-3">
-                            <label asp-for="SpecContainerSelector" class="form-label">Spec Row Selector (e.g. //tr or //dl/div)</label>
-                            <input asp-for="SpecContainerSelector" class="form-control" />
-                            <span asp-validation-for="SpecContainerSelector" class="text-danger"></span>
-                        </div>
+                    <div class="alert alert-info mt-3 mb-0">
+                        <strong>Path syntax:</strong> use dot notation for nesting (<code>price.amount</code>), bracket notation for arrays (<code>photos[0].url</code>), leave blank to skip a field.
+                    </div>
+                }
+                else
+                {
+                    <!-- HTML XPath selectors -->
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <h4 class="h5 fw-bold mb-3">Main Field Selectors (XPath)</h4>
 
-                        <div class="row">
-                            <div class="col-6 mb-3">
-                                <label asp-for="SpecLabelSelector" class="form-label">Label Selector (.//td[1])</label>
-                                <input asp-for="SpecLabelSelector" class="form-control" />
-                                <span asp-validation-for="SpecLabelSelector" class="text-danger"></span>
+                            <div class="mb-3">
+                                <label asp-for="TitleSelector" class="form-label">Title Selector</label>
+                                <input asp-for="TitleSelector" class="form-control" placeholder="//h1" />
+                                <span asp-validation-for="TitleSelector" class="text-danger"></span>
                             </div>
-                            <div class="col-6 mb-3">
-                                <label asp-for="SpecValueSelector" class="form-label">Value Selector (.//td[2])</label>
-                                <input asp-for="SpecValueSelector" class="form-control" />
-                                <span asp-validation-for="SpecValueSelector" class="text-danger"></span>
-                            </div>
-                        </div>
 
-                        <hr class="my-4" />
-                        
-                        <h4 class="h5 fw-bold mb-3">Label Mappings (Contains Match)</h4>
-                        
-                        <div class="row">
-                            <div class="col-6 mb-3">
-                                <label asp-for="BedroomLabel" class="form-label">Bedrooms Label</label>
-                                <input asp-for="BedroomLabel" class="form-control" placeholder="Slaapkamers" />
-                                <span asp-validation-for="BedroomLabel" class="text-danger"></span>
+                            <div class="mb-3">
+                                <label asp-for="PriceSelector" class="form-label">Price Selector</label>
+                                <input asp-for="PriceSelector" class="form-control" placeholder="//div[contains(class, 'price')]" />
+                                <span asp-validation-for="PriceSelector" class="text-danger"></span>
                             </div>
-                            <div class="col-6 mb-3">
-                                <label asp-for="CountBedrooms" class="form-label">Count Bedrooms</label>
-                                <input asp-for="CountBedrooms" type="checkbox" class="form-check-input" />
-                                <span asp-validation-for="CountBedrooms" class="text-danger"></span>
-                            </div>
-                        </div>
 
-                        <div class="row">
-                            <div class="col-6 mb-3">
-                                <label asp-for="LivingAreaLabel" class="form-label">Living Area Label</label>
-                                <input asp-for="LivingAreaLabel" class="form-control" placeholder="Bewoonbare opp" />
-                                <span asp-validation-for="LivingAreaLabel" class="text-danger"></span>
+                            <div class="mb-3">
+                                <label asp-for="BedroomSelector" class="form-label">Bedroom Selector</label>
+                                <input asp-for="BedroomSelector" class="form-control" />
+                                <span asp-validation-for="BedroomSelector" class="text-danger"></span>
                             </div>
-                            <div class="col-6 mb-3">
-                                <label asp-for="PlotAreaLabel" class="form-label">Plot Area Label</label>
-                                <input asp-for="PlotAreaLabel" class="form-control" placeholder="Grondopp" />
-                                <span asp-validation-for="PlotAreaLabel" class="text-danger"></span>
+
+                            <div class="mb-3">
+                                <label asp-for="DescriptionSelector" class="form-label">Description Selector</label>
+                                <input asp-for="DescriptionSelector" class="form-control" />
+                                <span asp-validation-for="DescriptionSelector" class="text-danger"></span>
                             </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-6 mb-3">
-                                <label asp-for="EpcLabel" class="form-label">EPC Label</label>
-                                <input asp-for="EpcLabel" class="form-control" placeholder="EPC" />
-                                <span asp-validation-for="EpcLabel" class="text-danger"></span>
+
+                            <div class="mb-3">
+                                <label asp-for="ImageSelector" class="form-label">Image Selector</label>
+                                <input asp-for="ImageSelector" class="form-control" />
+                                <span asp-validation-for="ImageSelector" class="text-danger"></span>
                             </div>
-                            <div class="col-6 mb-3">
-                                <label asp-for="ReferenceLabel" class="form-label">Reference/External ID Label</label>
-                                <input asp-for="ReferenceLabel" class="form-control" placeholder="Referentie" />
-                                <span asp-validation-for="ReferenceLabel" class="text-danger"></span>
+
+                            <div class="mb-3">
+                                <label asp-for="AddressSelector" class="form-label">Address Selector</label>
+                                <input asp-for="AddressSelector" class="form-control" />
+                                <span asp-validation-for="AddressSelector" class="text-danger"></span>
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="ExternalIdPattern" class="form-label">External ID Pattern (Regex on URL)</label>
+                                <input asp-for="ExternalIdPattern" class="form-control" placeholder="/(\d+)$" />
+                                <span asp-validation-for="ExternalIdPattern" class="text-danger"></span>
                             </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label asp-for="AddressLabel" class="form-label">Combined Address Label</label>
-                            <input asp-for="AddressLabel" class="form-control" placeholder="Adres" />
-                            <span asp-validation-for="AddressLabel" class="text-danger"></span>
-                        </div>
+                        <div class="col-md-6">
+                            <h4 class="h5 fw-bold mb-3">Specification Table (Key-Value)</h4>
 
-                        <div class="row">
-                            <div class="col-6 mb-3">
-                                <label asp-for="ZipCodeLabel" class="form-label">Zip Code Label</label>
-                                <input asp-for="ZipCodeLabel" class="form-control" placeholder="Postcode" />
-                                <span asp-validation-for="ZipCodeLabel" class="text-danger"></span>
+                            <div class="mb-3">
+                                <label asp-for="SpecContainerSelector" class="form-label">Spec Row Selector (e.g. //tr or //dl/div)</label>
+                                <input asp-for="SpecContainerSelector" class="form-control" />
+                                <span asp-validation-for="SpecContainerSelector" class="text-danger"></span>
                             </div>
-                            <div class="col-6 mb-3">
-                                <label asp-for="CityLabel" class="form-label">City Label</label>
-                                <input asp-for="CityLabel" class="form-control" placeholder="Stad" />
-                                <span asp-validation-for="CityLabel" class="text-danger"></span>
+
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label asp-for="SpecLabelSelector" class="form-label">Label Selector (.//td[1])</label>
+                                    <input asp-for="SpecLabelSelector" class="form-control" />
+                                    <span asp-validation-for="SpecLabelSelector" class="text-danger"></span>
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label asp-for="SpecValueSelector" class="form-label">Value Selector (.//td[2])</label>
+                                    <input asp-for="SpecValueSelector" class="form-control" />
+                                    <span asp-validation-for="SpecValueSelector" class="text-danger"></span>
+                                </div>
                             </div>
-                        </div>
-                        <div class="mb-3">
-                            <label asp-for="PriceLabel" class="form-label">Price Label</label>
-                            <input asp-for="PriceLabel" class="form-control" placeholder="Prijs" />
-                            <span asp-validation-for="PriceLabel" class="text-danger"></span>
+
+                            <hr class="my-4" />
+
+                            <h4 class="h5 fw-bold mb-3">Label Mappings (Contains Match)</h4>
+
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label asp-for="BedroomLabel" class="form-label">Bedrooms Label</label>
+                                    <input asp-for="BedroomLabel" class="form-control" placeholder="Slaapkamers" />
+                                    <span asp-validation-for="BedroomLabel" class="text-danger"></span>
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label asp-for="CountBedrooms" class="form-label">Count Bedrooms</label>
+                                    <input asp-for="CountBedrooms" type="checkbox" class="form-check-input" />
+                                    <span asp-validation-for="CountBedrooms" class="text-danger"></span>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label asp-for="LivingAreaLabel" class="form-label">Living Area Label</label>
+                                    <input asp-for="LivingAreaLabel" class="form-control" placeholder="Bewoonbare opp" />
+                                    <span asp-validation-for="LivingAreaLabel" class="text-danger"></span>
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label asp-for="PlotAreaLabel" class="form-label">Plot Area Label</label>
+                                    <input asp-for="PlotAreaLabel" class="form-control" placeholder="Grondopp" />
+                                    <span asp-validation-for="PlotAreaLabel" class="text-danger"></span>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label asp-for="EpcLabel" class="form-label">EPC Label</label>
+                                    <input asp-for="EpcLabel" class="form-control" placeholder="EPC" />
+                                    <span asp-validation-for="EpcLabel" class="text-danger"></span>
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label asp-for="ReferenceLabel" class="form-label">Reference/External ID Label</label>
+                                    <input asp-for="ReferenceLabel" class="form-control" placeholder="Referentie" />
+                                    <span asp-validation-for="ReferenceLabel" class="text-danger"></span>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="AddressLabel" class="form-label">Combined Address Label</label>
+                                <input asp-for="AddressLabel" class="form-control" placeholder="Adres" />
+                                <span asp-validation-for="AddressLabel" class="text-danger"></span>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label asp-for="ZipCodeLabel" class="form-label">Zip Code Label</label>
+                                    <input asp-for="ZipCodeLabel" class="form-control" placeholder="Postcode" />
+                                    <span asp-validation-for="ZipCodeLabel" class="text-danger"></span>
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label asp-for="CityLabel" class="form-label">City Label</label>
+                                    <input asp-for="CityLabel" class="form-control" placeholder="Stad" />
+                                    <span asp-validation-for="CityLabel" class="text-danger"></span>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label asp-for="PriceLabel" class="form-label">Price Label</label>
+                                <input asp-for="PriceLabel" class="form-control" placeholder="Prijs" />
+                                <span asp-validation-for="PriceLabel" class="text-danger"></span>
+                            </div>
                         </div>
                     </div>
-                </div>
+                }
 
                 <div class="mt-4 pt-3 border-top d-flex justify-content-end gap-2">
                     <a asp-action="Edit" asp-route-id="@Model.AgencyId" class="btn btn-outline-secondary">Cancel</a>

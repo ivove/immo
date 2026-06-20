@@ -176,6 +176,74 @@ public class CrawlerService
         }
     }
 
+    /// <summary>
+    /// Fetches a JSON listing API endpoint and stores the raw JSON as a single <see cref="RawPage"/>.
+    /// The page URL is stored with a <c>json-api://</c> prefix so the parser can identify it.
+    /// On recrawl the content hash is compared; if unchanged only the timestamp is bumped.
+    /// </summary>
+    public async Task CrawlJsonApiAsync(string apiUrl, int? agencyId = null)
+    {
+        var storedUrl = "json-api://" + apiUrl;
+        _logger.LogInformation("Crawling JSON API: {Url}", apiUrl);
+
+        try
+        {
+            await ApplyRateLimit();
+            using var response = await FetchResponseAsync(apiUrl);
+            response.EnsureSuccessStatusCode();
+
+            var jsonContent = await response.Content.ReadAsStringAsync();
+            var hash = ComputeHash(jsonContent);
+
+            var existing = _context.RawPages.FirstOrDefault(p => p.Url == storedUrl);
+            if (existing != null)
+            {
+                var settings = _context.AppSettings.FirstOrDefault() ?? new AppSettings();
+                var age = DateTime.UtcNow - existing.CrawledAt;
+
+                if (age.TotalDays < settings.RecrawlAfterDays)
+                {
+                    _logger.LogInformation("Skipping JSON API {Url} — fetched {Hours:F0}h ago", apiUrl, age.TotalHours);
+                    return;
+                }
+
+                if (hash == existing.ContentHash)
+                {
+                    existing.CrawledAt = DateTime.UtcNow;
+                    await _context.SaveChangesAsync();
+                    _logger.LogInformation("JSON API content unchanged for {Url} — timestamp updated", apiUrl);
+                }
+                else
+                {
+                    existing.HtmlContent  = jsonContent;
+                    existing.ContentHash  = hash;
+                    existing.CrawledAt    = DateTime.UtcNow;
+                    existing.IsParsed     = false;
+                    await _context.SaveChangesAsync();
+                    _logger.LogInformation("JSON API content changed for {Url} — marked for re-parse", apiUrl);
+                }
+            }
+            else
+            {
+                _context.RawPages.Add(new RawPage
+                {
+                    Url         = storedUrl,
+                    HtmlContent = jsonContent,
+                    ContentHash = hash,
+                    CrawledAt   = DateTime.UtcNow,
+                    IsParsed    = false,
+                    AgencyId    = agencyId
+                });
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Saved JSON API page {Url} (hash: {Hash})", apiUrl, hash[..8]);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error crawling JSON API {Url}", apiUrl);
+        }
+    }
+
     private async Task ApplyRateLimit()
     {
         var delayMs = Random.Shared.Next(2000, 5000);

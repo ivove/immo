@@ -25,6 +25,11 @@
                     <i class="bi bi-link"></i> Fix References
                 </button>
             </form>
+            <form asp-action="PurgeOrphanedProperties" method="post" class="d-inline" onsubmit="return confirm('This will permanently delete all properties whose agency no longer exists. Proceed?');">
+                <button type="submit" class="btn btn-outline-danger btn-lg shadow-sm" title="Delete properties with no matching agency">
+                    <i class="bi bi-trash"></i> Purge Orphans
+                </button>
+            </form>
             <a asp-action="Create" class="btn btn-primary btn-lg shadow-sm">
                 <i class="bi bi-plus-lg me-2"></i> Add Agency
             </a>

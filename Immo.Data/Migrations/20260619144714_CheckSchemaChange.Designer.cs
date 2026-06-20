@@ -3,6 +3,7 @@ using System;
 using Immo.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Immo.Data.Migrations
 {
     [DbContext(typeof(ImmoContext))]
-    partial class ImmoContextModelSnapshot : ModelSnapshot
+    [Migration("20260619144714_CheckSchemaChange")]
+    partial class CheckSchemaChange
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.7");
@@ -129,7 +132,7 @@ namespace Immo.Data.Migrations
                             Id = 1,
                             CrawlIntervalHours = 4,
                             FromEmail = "",
-                            NewOrUpdatedThresholdDays = 7,
+                            NewOrUpdatedThresholdDays = 3,
                             PreferredTimezone = "UTC",
                             RecrawlAfterDays = 3,
                             SmtpHost = "",
@@ -219,9 +222,6 @@ namespace Immo.Data.Migrations
                     b.Property<string>("JsonDescriptionPath")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("JsonDetailUrlTemplate")
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("JsonEpcPath")
                         .HasColumnType("TEXT");
 
@@ -247,12 +247,6 @@ namespace Immo.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("JsonTitlePath")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("JsonTypeFilterPath")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("JsonTypeFilterValues")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("JsonUnderOptionValue")

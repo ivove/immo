@@ -48,7 +48,10 @@ public class CrawlerWorker : BackgroundService
                         agency.CrawlRequestedAt = null;
                         await context.SaveChangesAsync(stoppingToken);
 
-                        await crawler.CrawlListingPageAsync(agency.AgencyDomain, agencyId: agency.Id);
+                        if (agency.DataSourceType == "json_api" && !string.IsNullOrEmpty(agency.ApiListingUrl))
+                            await crawler.CrawlJsonApiAsync(agency.ApiListingUrl, agency.Id);
+                        else
+                            await crawler.CrawlListingPageAsync(agency.AgencyDomain, agencyId: agency.Id);
                     }
                 }
 
@@ -70,7 +73,11 @@ public class CrawlerWorker : BackgroundService
                             if (stoppingToken.IsCancellationRequested) break;
 
                             _logger.LogInformation("Processing agency: {Domain}", agency.AgencyDomain);
-                            await crawler.CrawlListingPageAsync(agency.AgencyDomain, agencyId: agency.Id);
+
+                            if (agency.DataSourceType == "json_api" && !string.IsNullOrEmpty(agency.ApiListingUrl))
+                                await crawler.CrawlJsonApiAsync(agency.ApiListingUrl, agency.Id);
+                            else
+                                await crawler.CrawlListingPageAsync(agency.AgencyDomain, agencyId: agency.Id);
                         }
 
                         if (!stoppingToken.IsCancellationRequested)

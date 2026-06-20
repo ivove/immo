@@ -34,7 +34,7 @@ public class AppSettings
     /// <summary>
     /// The threshold in days during which a property is highlighted as "New" or "Updated".
     /// </summary>
-    public int NewOrUpdatedThresholdDays { get; set; } = 3;
+    public int NewOrUpdatedThresholdDays { get; set; } = 7;
 
     // --------------- Email / SMTP settings ---------------
 

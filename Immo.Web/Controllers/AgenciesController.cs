@@ -73,7 +73,7 @@ public class AgenciesController : Controller
     // POST: Agencies/Create
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create([Bind("Id,AgencyDomain,PaginationSelector,IsSuspended,Notes")] Agency agency)
+    public async Task<IActionResult> Create([Bind("Id,AgencyDomain,PaginationSelector,DataSourceType,ApiListingUrl,IsSuspended,Notes")] Agency agency)
     {
         if (ModelState.IsValid)
         {
@@ -102,7 +102,7 @@ public class AgenciesController : Controller
     // POST: Agencies/Edit/5
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(int id, [Bind("Id,AgencyDomain,PaginationSelector,IsSuspended,Notes")] Agency agency)
+    public async Task<IActionResult> Edit(int id, [Bind("Id,AgencyDomain,PaginationSelector,DataSourceType,ApiListingUrl,IsSuspended,Notes")] Agency agency)
     {
         if (id != agency.Id) return NotFound();
 
@@ -205,6 +205,31 @@ public class AgenciesController : Controller
 
         _logger.LogInformation("Successfully queued {Count} pages for reparsing for agency {AgencyDomain} (ID: {Id}).", count, agency.AgencyDomain, agency.Id);
         TempData["SuccessMessage"] = $"Queued {count} page{(count == 1 ? "" : "s")} for reparsing for \u0022{agency.AgencyDomain}\u0022. The parser will process them shortly.";
+        return RedirectToAction(nameof(Index));
+    }
+
+    // POST: Agencies/PurgeOrphanedProperties
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> PurgeOrphanedProperties()
+    {
+        var agencyIds = await _context.Agencies.Select(a => a.Id).ToListAsync();
+
+        var orphanedProperties = await _context.Properties
+            .Where(p => p.AgencyId == null || !agencyIds.Contains(p.AgencyId.Value))
+            .ToListAsync();
+
+        if (orphanedProperties.Count > 0)
+        {
+            _context.Properties.RemoveRange(orphanedProperties);
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = $"Removed {orphanedProperties.Count} orphaned propert{(orphanedProperties.Count == 1 ? "y" : "ies")}.";
+        }
+        else
+        {
+            TempData["SuccessMessage"] = "No orphaned properties found.";
+        }
+
         return RedirectToAction(nameof(Index));
     }
 
@@ -321,6 +346,7 @@ public class AgenciesController : Controller
         ViewBag.AgencyId = agency.Id;
         ViewBag.AgencyDomain = agency.AgencyDomain;
         ViewBag.TestedUrl = urlToTest;
+        ViewBag.DataSourceType = agency.DataSourceType;
 
         if (string.IsNullOrWhiteSpace(urlToTest))
         {
@@ -334,39 +360,51 @@ public class AgenciesController : Controller
             client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
             var response = await client.GetAsync(urlToTest);
             response.EnsureSuccessStatusCode();
-            var html = await response.Content.ReadAsStringAsync();
+            var content = await response.Content.ReadAsStringAsync();
+            ViewBag.RawHtmlLength = content.Length;
 
-            var doc = new HtmlAgilityPack.HtmlDocument();
-            doc.LoadHtml(html);
-
-            // 1. Pagination Extraction
-            var paginationLinks = new List<string>();
-            if (!string.IsNullOrEmpty(agency.PaginationSelector))
+            if (agency.DataSourceType == "json_api")
             {
-                var nodes = doc.DocumentNode.SelectNodes(agency.PaginationSelector);
-                if (nodes != null)
+                var rawPage = new Immo.Data.Entities.RawPage
                 {
-                    paginationLinks = nodes.Select(n => n.GetAttributeValue("href", ""))
-                                           .Where(href => !string.IsNullOrEmpty(href))
-                                           .Select(href => new Uri(new Uri(urlToTest), href).ToString())
-                                           .Distinct()
-                                           .ToList();
-                }
+                    Url = "json-api://" + urlToTest,
+                    HtmlContent = content,
+                    AgencyId = agency.Id,
+                    CrawledAt = DateTime.UtcNow
+                };
+                var parser = new Immo.Parser.Strategies.JsonApiParserStrategy(_context);
+                ViewBag.ParsedProperties = parser.ParseMany(rawPage).ToList();
             }
-            ViewBag.PaginationLinks = paginationLinks;
+            else
+            {
+                var doc = new HtmlAgilityPack.HtmlDocument();
+                doc.LoadHtml(content);
 
-            // 2. Property Link Extraction
-            var linkExtractor = new Immo.Crawler.Extractors.GeneralLinkExtractor(_context);
-            var propertyLinks = linkExtractor.ExtractLinks(html, urlToTest, agency.AgencyDomain).ToList();
-            ViewBag.PropertyLinks = propertyLinks;
+                // 1. Pagination Extraction
+                var paginationLinks = new List<string>();
+                if (!string.IsNullOrEmpty(agency.PaginationSelector))
+                {
+                    var nodes = doc.DocumentNode.SelectNodes(agency.PaginationSelector);
+                    if (nodes != null)
+                    {
+                        paginationLinks = nodes.Select(n => n.GetAttributeValue("href", ""))
+                                               .Where(href => !string.IsNullOrEmpty(href))
+                                               .Select(href => new Uri(new Uri(urlToTest), href).ToString())
+                                               .Distinct()
+                                               .ToList();
+                    }
+                }
+                ViewBag.PaginationLinks = paginationLinks;
 
-            // 3. Parser Strategy
-            var rawPage = new Immo.Data.Entities.RawPage { Url = urlToTest, HtmlContent = html, AgencyId = agency.Id, CrawledAt = DateTime.UtcNow };
-            var parser = new Immo.Parser.Strategies.ConfigurableParserStrategy(_context);
-            var parsedProperty = parser.Parse(rawPage, doc);
-            ViewBag.ParsedProperty = parsedProperty;
-            
-            ViewBag.RawHtmlLength = html.Length;
+                // 2. Property Link Extraction
+                var linkExtractor = new Immo.Crawler.Extractors.GeneralLinkExtractor(_context);
+                ViewBag.PropertyLinks = linkExtractor.ExtractLinks(content, urlToTest, agency.AgencyDomain).ToList();
+
+                // 3. Parser Strategy
+                var rawPage = new Immo.Data.Entities.RawPage { Url = urlToTest, HtmlContent = content, AgencyId = agency.Id, CrawledAt = DateTime.UtcNow };
+                var parser = new Immo.Parser.Strategies.ConfigurableParserStrategy(_context);
+                ViewBag.ParsedProperty = parser.Parse(rawPage, doc);
+            }
         }
         catch (Exception ex)
         {
@@ -438,6 +476,7 @@ public class AgenciesController : Controller
         if (agency == null) return NotFound();
 
         var config = agency.ParserConfig ?? new ParserConfig { AgencyId = agencyId };
+        ViewData["DataSourceType"] = agency.DataSourceType;
         return View(config);
     }
 
@@ -459,6 +498,8 @@ public class AgenciesController : Controller
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Edit), new { id = config.AgencyId });
         }
+        var agency = await _context.Agencies.FindAsync(config.AgencyId);
+        ViewData["DataSourceType"] = agency?.DataSourceType;
         return View(config);
     }
 
@@ -639,6 +680,8 @@ public class AgenciesController : Controller
                         }
 
                         existing.PaginationSelector = imported.PaginationSelector;
+                        existing.DataSourceType     = imported.DataSourceType;
+                        existing.ApiListingUrl      = imported.ApiListingUrl;
                         existing.IsSuspended = imported.IsSuspended;
                         if (!string.IsNullOrEmpty(imported.Notes))
                         {

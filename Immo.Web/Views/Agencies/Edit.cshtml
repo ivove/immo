@@ -2,6 +2,7 @@
 
 @{
     ViewData["Title"] = "Edit Agency";
+    var isJsonApi = Model.DataSourceType == "json_api";
 }
 
 <div class="container py-4">
@@ -17,23 +18,64 @@
             <div class="card border-0 shadow-sm rounded-4 h-100">
                 <div class="card-body p-4">
                     <h2 class="fw-bold mb-4">Agency Details</h2>
-                    
-                    <form asp-action="Edit">
+
+                    <form asp-action="Edit" id="agencyEditForm">
                         <input type="hidden" asp-for="Id" />
                         <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
-                        
+
                         <div class="form-floating mb-4">
                             <input asp-for="AgencyDomain" class="form-control" placeholder="https://example.com" required />
                             <label asp-for="AgencyDomain">Agency Domain / Base URL</label>
                             <span asp-validation-for="AgencyDomain" class="text-danger"></span>
                         </div>
 
-                        <div class="form-floating mb-4">
-                            <input asp-for="PaginationSelector" class="form-control" placeholder="e.g. .pagination a.next" />
-                            <label asp-for="PaginationSelector">Pagination Selector (CSS or XPath)</label>
-                            <span asp-validation-for="PaginationSelector" class="text-danger"></span>
-                            <div class="form-text mt-2">
-                                CSS or XPath selector to locate "next page" links on listing pages (e.g. <code>.pagination a.next</code>).
+                        <!-- Data Source Type -->
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">Data Source Type</label>
+                            <div class="d-flex gap-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="DataSourceType" id="srcHtml"
+                                           value="html" @(isJsonApi ? "" : "checked") onchange="toggleApiFields(this.value)" />
+                                    <label class="form-check-label" for="srcHtml">
+                                        <i class="bi bi-file-earmark-code me-1"></i> HTML Scraping
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="DataSourceType" id="srcJson"
+                                           value="json_api" @(isJsonApi ? "checked" : "") onchange="toggleApiFields(this.value)" />
+                                    <label class="form-check-label" for="srcJson">
+                                        <i class="bi bi-braces me-1"></i> JSON API
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="form-text text-muted mt-1">
+                                Choose <strong>HTML Scraping</strong> for standard websites, or
+                                <strong>JSON API</strong> for agencies that expose a REST endpoint returning JSON.
+                            </div>
+                        </div>
+
+                        <!-- HTML-only fields -->
+                        <div id="htmlOnlyFields" @(isJsonApi ? "style=display:none" : "")>
+                            <div class="form-floating mb-4">
+                                <input asp-for="PaginationSelector" class="form-control" placeholder="e.g. //a[contains(class,'next')]" />
+                                <label asp-for="PaginationSelector">Pagination Selector (XPath)</label>
+                                <span asp-validation-for="PaginationSelector" class="text-danger"></span>
+                                <div class="form-text mt-2">
+                                    XPath selector to locate "next page" links on listing pages.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- JSON API-only fields -->
+                        <div id="jsonApiFields" @(isJsonApi ? "" : "style=display:none")>
+                            <div class="form-floating mb-4">
+                                <input asp-for="ApiListingUrl" class="form-control" placeholder="https://api.agency.com/v1/properties" />
+                                <label asp-for="ApiListingUrl">API Listing URL</label>
+                                <span asp-validation-for="ApiListingUrl" class="text-danger"></span>
+                                <div class="form-text mt-2">
+                                    Full URL of the JSON endpoint that returns the property list.
+                                    Configure field mappings under <strong>Parser Configuration</strong>.
+                                </div>
                             </div>
                         </div>
 
@@ -60,7 +102,7 @@
                     </div>
                     <div class="d-grid gap-2 mb-2">
                         <form asp-action="ReparseData" asp-route-id="@Model.Id" method="post" class="d-grid"
-                                onsubmit="return confirm('Reparse all existing pages for \'@Model.AgencyDomain\'? This will update property details based on the current parser configuration.')">
+                              onsubmit="return confirm('Reparse all existing pages for \'@Model.AgencyDomain\'?')">
                             <button type="submit" class="btn btn-outline-secondary">
                                 <i class="bi bi-arrow-repeat"></i> Reparse All Properties
                             </button>
@@ -68,13 +110,13 @@
                     </div>
                     <div class="d-grid gap-2">
                         <form asp-action="PurgeData" asp-route-id="@Model.Id" method="post" class="d-grid"
-                                onsubmit="return confirm('Delete all crawled pages and properties for \'@Model.AgencyDomain\'? The agency configuration will be kept.')">
+                              onsubmit="return confirm('Delete all crawled pages and properties for \'@Model.AgencyDomain\'? The agency configuration will be kept.')">
                             <button type="submit" class="btn btn-outline-warning">
                                 <i class="bi bi-database-x"></i> Purge Crawled Data
                             </button>
                         </form>
                     </div>
-                    <div class="d-grid gap-2 mb-2">
+                    <div class="d-grid gap-2 mt-2">
                         <a asp-action="Debug" asp-route-agencyId="@Model.Id" class="btn btn-outline-warning">
                             <i class="bi bi-bug me-2"></i>Debug Crawler Test
                         </a>
@@ -83,7 +125,8 @@
             </div>
         </div>
 
-        <div class="col-lg-7">
+        <!-- HTML agency: Crawling Rules -->
+        <div class="col-lg-7" id="crawlingRulesSection" @(isJsonApi ? "style=display:none" : "")>
             <div class="card border-0 shadow-sm rounded-4">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -126,9 +169,49 @@
                 </div>
             </div>
         </div>
+
+        <!-- JSON API agency: info panel -->
+        <div class="col-lg-7" id="jsonApiInfoSection" @(isJsonApi ? "" : "style=display:none")>
+            <div class="card border-0 shadow-sm rounded-4 border-start border-4 border-info">
+                <div class="card-body p-4">
+                    <h2 class="fw-bold mb-3">
+                        <i class="bi bi-braces text-info me-2"></i>JSON API Mode
+                    </h2>
+                    <p class="text-muted mb-3">
+                        In JSON API mode the crawler fetches the configured API endpoint directly and stores
+                        the full JSON response. The parser then fans each array element out into an individual
+                        property record using the field paths configured under <strong>Parser Configuration</strong>.
+                    </p>
+                    <div class="alert alert-info mb-4">
+                        <strong>No crawling rules needed</strong> — URL-pattern rules only apply to HTML scraping.
+                    </div>
+                    <h5 class="fw-semibold mb-2">JSON Path Syntax</h5>
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead class="table-light">
+                            <tr><th>Field</th><th>Example path</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Top-level field</td><td><code>title</code></td></tr>
+                            <tr><td>Nested field</td><td><code>price.amount</code></td></tr>
+                            <tr><td>Array index</td><td><code>photos[0].url</code></td></tr>
+                            <tr><td>Items array</td><td><code>data</code> · leave blank if root is the array</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script>
+        function toggleApiFields(value) {
+            const isJson = value === 'json_api';
+            document.getElementById('htmlOnlyFields').style.display       = isJson ? 'none' : '';
+            document.getElementById('jsonApiFields').style.display        = isJson ? '' : 'none';
+            document.getElementById('crawlingRulesSection').style.display = isJson ? 'none' : '';
+            document.getElementById('jsonApiInfoSection').style.display   = isJson ? '' : 'none';
+        }
+    </script>
 }
