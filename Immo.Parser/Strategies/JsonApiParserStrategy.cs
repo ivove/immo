@@ -93,7 +93,7 @@ public class JsonApiParserStrategy : IMultiPropertyParserStrategy
             var domain = uri.Host.Replace("www.", "");
             return _context.ParserConfigs
                 .Include(c => c.Agency)
-                .FirstOrDefault(c => c.Agency.AgencyDomain.Contains(domain));
+                .FirstOrDefault(c => c.Agency != null && c.Agency.AgencyDomain.Contains(domain));
         }
 
         return null;
