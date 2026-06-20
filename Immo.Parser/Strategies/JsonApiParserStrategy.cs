@@ -3,6 +3,7 @@ using HtmlAgilityPack;
 using Immo.Data;
 using Immo.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Immo.Parser.Strategies;
 
@@ -18,10 +19,12 @@ namespace Immo.Parser.Strategies;
 public class JsonApiParserStrategy : IMultiPropertyParserStrategy
 {
     private readonly ImmoContext _context;
+    private readonly ILogger<JsonApiParserStrategy> _logger;
 
-    public JsonApiParserStrategy(ImmoContext context)
+    public JsonApiParserStrategy(ImmoContext context, ILogger<JsonApiParserStrategy> logger)
     {
         _context = context;
+        _logger = logger;
     }
 
     /// <summary>
@@ -111,6 +114,12 @@ public class JsonApiParserStrategy : IMultiPropertyParserStrategy
         var city       = JsonPathHelper.GetString(item, config.JsonCityPath);
         string? sourceUrl;
         if (!string.IsNullOrEmpty(config.JsonDetailUrlTemplate))
+        {
+            if (string.IsNullOrEmpty(externalId))
+            {
+                _logger.LogWarning("Skipping item: JsonDetailUrlTemplate is set but no external ID was found at '{Path}'", config.JsonExternalIdPath);
+                return null;
+            }
             sourceUrl = config.JsonDetailUrlTemplate
                 .Replace("{id}", externalId)
                 .Replace("{externalId}", externalId)
@@ -118,6 +127,7 @@ public class JsonApiParserStrategy : IMultiPropertyParserStrategy
                 .Replace("{city}", city)
                 .Replace("{postalCode}", zip)
                 .Replace("{zip}", zip);
+        }
         else
             sourceUrl = JsonPathHelper.GetString(item, config.JsonUrlPath) ?? page.Url;
 

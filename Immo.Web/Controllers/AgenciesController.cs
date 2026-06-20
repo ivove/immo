@@ -215,20 +215,13 @@ public class AgenciesController : Controller
     {
         var agencyIds = await _context.Agencies.Select(a => a.Id).ToListAsync();
 
-        var orphanedProperties = await _context.Properties
+        var count = await _context.Properties
             .Where(p => p.AgencyId == null || !agencyIds.Contains(p.AgencyId.Value))
-            .ToListAsync();
+            .ExecuteDeleteAsync();
 
-        if (orphanedProperties.Count > 0)
-        {
-            _context.Properties.RemoveRange(orphanedProperties);
-            await _context.SaveChangesAsync();
-            TempData["SuccessMessage"] = $"Removed {orphanedProperties.Count} orphaned propert{(orphanedProperties.Count == 1 ? "y" : "ies")}.";
-        }
-        else
-        {
-            TempData["SuccessMessage"] = "No orphaned properties found.";
-        }
+        TempData["SuccessMessage"] = count > 0
+            ? $"Removed {count} orphaned propert{(count == 1 ? "y" : "ies")}."
+            : "No orphaned properties found.";
 
         return RedirectToAction(nameof(Index));
     }
@@ -372,7 +365,7 @@ public class AgenciesController : Controller
                     AgencyId = agency.Id,
                     CrawledAt = DateTime.UtcNow
                 };
-                var parser = new Immo.Parser.Strategies.JsonApiParserStrategy(_context);
+                var parser = new Immo.Parser.Strategies.JsonApiParserStrategy(_context, Microsoft.Extensions.Logging.Abstractions.NullLogger<Immo.Parser.Strategies.JsonApiParserStrategy>.Instance);
                 ViewBag.ParsedProperties = parser.ParseMany(rawPage).ToList();
             }
             else

@@ -188,6 +188,19 @@ public class CrawlerService
 
         try
         {
+            // Check freshness before fetching (mirrors CrawlPageAsync behaviour)
+            var existing = _context.RawPages.FirstOrDefault(p => p.Url == storedUrl);
+            if (existing != null)
+            {
+                var settings = _context.AppSettings.FirstOrDefault() ?? new AppSettings();
+                var age = DateTime.UtcNow - existing.CrawledAt;
+                if (age.TotalDays < settings.RecrawlAfterDays)
+                {
+                    _logger.LogInformation("Skipping JSON API {Url} — fetched {Hours:F0}h ago", apiUrl, age.TotalHours);
+                    return;
+                }
+            }
+
             await ApplyRateLimit();
             using var response = await FetchResponseAsync(apiUrl);
             response.EnsureSuccessStatusCode();
@@ -195,18 +208,8 @@ public class CrawlerService
             var jsonContent = await response.Content.ReadAsStringAsync();
             var hash = ComputeHash(jsonContent);
 
-            var existing = _context.RawPages.FirstOrDefault(p => p.Url == storedUrl);
             if (existing != null)
             {
-                var settings = _context.AppSettings.FirstOrDefault() ?? new AppSettings();
-                var age = DateTime.UtcNow - existing.CrawledAt;
-
-                if (age.TotalDays < settings.RecrawlAfterDays)
-                {
-                    _logger.LogInformation("Skipping JSON API {Url} — fetched {Hours:F0}h ago", apiUrl, age.TotalHours);
-                    return;
-                }
-
                 if (hash == existing.ContentHash)
                 {
                     existing.CrawledAt = DateTime.UtcNow;
@@ -338,7 +341,9 @@ public class CrawlerService
         
         // Fetch only URLs to minimize memory usage, but we need the RawPageId for Properties
         var allPages = _context.RawPages.Select(p => new { p.Id, p.Url }).ToList();
-        var unseenPages = allPages.Where(p => !_crawledPropertyUrls.Contains(p.Url)).ToList();
+        // Skip json-api:// pages — they have no individual detail URLs to check
+        var unseenPages = allPages.Where(p => !_crawledPropertyUrls.Contains(p.Url)
+                                           && !p.Url.StartsWith("json-api://", StringComparison.OrdinalIgnoreCase)).ToList();
         
         _logger.LogInformation("Found {Count} unseen pages to verify.", unseenPages.Count);
         

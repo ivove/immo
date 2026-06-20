@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -54,6 +55,30 @@ public static class JsonPathHelper
         return current;
     }
 
+    private static string? TextFromElement(JsonElement el) => el.ValueKind switch
+    {
+        JsonValueKind.String => el.GetString(),
+        JsonValueKind.Number => el.GetRawText(),
+        JsonValueKind.True   => "true",
+        JsonValueKind.False  => "false",
+        _                    => null
+    };
+
+    /// <summary>
+    /// Parses a formatted number string that may contain currency symbols, whitespace,
+    /// and European or US thousands/decimal separators (e.g. "€ 1.234,56" or "1,234.56").
+    /// </summary>
+    private static decimal? ParseDecimalText(string text)
+    {
+        var cleaned = Regex.Replace(text, @"[^\d.,]", "");
+        if (string.IsNullOrEmpty(cleaned)) return null;
+        // Whichever of '.' and ',' appears last is the decimal separator
+        var normalized = cleaned.LastIndexOf(',') > cleaned.LastIndexOf('.')
+            ? cleaned.Replace(".", "").Replace(",", ".")   // European: "1.234,56" → "1234.56"
+            : cleaned.Replace(",", "");                    // US/invariant: "1,234.56" → "1234.56"
+        return decimal.TryParse(normalized, NumberStyles.Any, CultureInfo.InvariantCulture, out var d) ? d : null;
+    }
+
     public static string? GetString(JsonElement root, string? path)
     {
         if (path is null) return null;
@@ -75,11 +100,8 @@ public static class JsonPathHelper
         var el = Navigate(root, path);
         if (el is null) return null;
         if (el.Value.ValueKind == JsonValueKind.Number && el.Value.TryGetDecimal(out var d)) return d;
-        // Fallback: strip non-numeric characters from a string value
-        var text = GetString(root, path);
-        if (text is null) return null;
-        var digits = Regex.Replace(text, @"[^0-9]", "");
-        return decimal.TryParse(digits, out var parsed) ? parsed : null;
+        var text = TextFromElement(el.Value);
+        return text is null ? null : ParseDecimalText(text);
     }
 
     public static int? GetInt(JsonElement root, string? path)
@@ -88,7 +110,7 @@ public static class JsonPathHelper
         var el = Navigate(root, path);
         if (el is null) return null;
         if (el.Value.ValueKind == JsonValueKind.Number && el.Value.TryGetInt32(out var i)) return i;
-        var text = GetString(root, path);
+        var text = TextFromElement(el.Value);
         if (text is null) return null;
         var digits = Regex.Replace(text, @"[^0-9]", "");
         return int.TryParse(digits, out var parsed) ? parsed : null;
@@ -100,10 +122,10 @@ public static class JsonPathHelper
         var el = Navigate(root, path);
         if (el is null) return null;
         if (el.Value.ValueKind == JsonValueKind.Number && el.Value.TryGetDouble(out var d)) return d;
-        var text = GetString(root, path);
+        var text = TextFromElement(el.Value);
         if (text is null) return null;
-        var digits = Regex.Replace(text, @"[^0-9]", "");
-        return double.TryParse(digits, out var parsed) ? parsed : null;
+        var dec = ParseDecimalText(text);
+        return dec.HasValue ? (double)dec.Value : null;
     }
 
     /// <summary>

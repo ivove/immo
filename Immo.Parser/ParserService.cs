@@ -117,7 +117,7 @@ public class ParserService
 
     public async Task ParsePendingPagesAsync()
     {
-        var unparsedPages = _context.RawPages.Where(p => !p.IsParsed).ToList();
+        var unparsedPages = await _context.RawPages.Where(p => !p.IsParsed).ToListAsync();
         _logger.LogInformation("Found {Count} unparsed pages.", unparsedPages.Count);
 
         foreach (var page in unparsedPages)
@@ -148,62 +148,20 @@ public class ParserService
 
                         if (existingProperty != null)
                         {
-                            var changes = new List<PropertyHistory>();
-
-                            void CheckChange<T>(string fieldName, T oldValue, T newValue)
-                            {
-                                if (!EqualityComparer<T>.Default.Equals(oldValue, newValue))
-                                    changes.Add(new PropertyHistory
-                                    {
-                                        PropertyId = existingProperty.Id,
-                                        Field      = fieldName,
-                                        OldValue   = oldValue?.ToString(),
-                                        NewValue   = newValue?.ToString(),
-                                        ChangedAt  = now
-                                    });
-                            }
-
-                            CheckChange("Title",       existingProperty.Title,       property.Title);
-                            CheckChange("Description", existingProperty.Description, property.Description);
-                            CheckChange("Price",       existingProperty.Price,       property.Price);
-                            CheckChange("ZipCode",     existingProperty.ZipCode,     property.ZipCode);
-                            CheckChange("City",        existingProperty.City,        property.City);
-                            CheckChange("Bedrooms",    existingProperty.Bedrooms,    property.Bedrooms);
-                            CheckChange("LivingArea",  existingProperty.LivingArea,  property.LivingArea);
-                            CheckChange("PlotArea",    existingProperty.PlotArea,    property.PlotArea);
-                            CheckChange("ImageUrl",    existingProperty.ImageUrl,    property.ImageUrl);
-                            CheckChange("EpcScore",    existingProperty.EpcScore,    property.EpcScore);
-                            CheckChange("Sold",        existingProperty.Sold,        property.Sold);
-                            CheckChange("UnderOption", existingProperty.UnderOption, property.UnderOption);
-
+                            var changes = RecordChanges(existingProperty, property, now);
                             if (changes.Any())
                             {
                                 _context.PropertyHistories.AddRange(changes);
                                 _logger.LogInformation("Recorded {Count} changes for property ExternalId={ExternalId}", changes.Count, property.ExternalId);
                             }
-
-                            existingProperty.Title        = property.Title;
-                            existingProperty.Description  = property.Description;
-                            existingProperty.Price        = property.Price;
-                            existingProperty.ZipCode      = property.ZipCode;
-                            existingProperty.City         = property.City;
-                            existingProperty.Bedrooms     = property.Bedrooms;
-                            existingProperty.LivingArea   = property.LivingArea;
-                            existingProperty.PlotArea     = property.PlotArea;
-                            existingProperty.ImageUrl     = property.ImageUrl;
-                            existingProperty.EpcScore     = property.EpcScore;
-                            existingProperty.SourceUrl    = property.SourceUrl;
-                            existingProperty.Sold         = property.Sold;
-                            existingProperty.UnderOption  = property.UnderOption;
-                            existingProperty.RawPageId    = page.Id;
-                            existingProperty.LastUpdatedAt = now;
+                            CopyFields(existingProperty, property, page.Id, page.AgencyId, now);
                             _logger.LogInformation("Updated property ExternalId={ExternalId}", property.ExternalId);
                         }
                         else
                         {
-                            property.RawPageId    = page.Id;
-                            property.AgencyId     = page.AgencyId;
-                            property.CreatedAt    = now;
+                            property.RawPageId     = page.Id;
+                            property.AgencyId      = page.AgencyId;
+                            property.CreatedAt     = now;
                             property.LastUpdatedAt = now;
                             _context.Properties.Add(property);
                             _logger.LogInformation("Added new property ExternalId={ExternalId} from {Url}", property.ExternalId, page.Url);
@@ -222,72 +180,25 @@ public class ParserService
                 var parsedProperty = strategy.Parse(page, document);
                 if (parsedProperty != null)
                 {
+                    var now = DateTime.UtcNow;
                     var existingProperty = await _context.Properties.FirstOrDefaultAsync(p => p.RawPageId == page.Id);
                     if (existingProperty != null)
                     {
-                        // Track changes before updating fields
-                        var now = DateTime.UtcNow;
-                        var changes = new List<PropertyHistory>();
-
-                        void CheckChange<T>(string fieldName, T oldValue, T newValue)
-                        {
-                            if (!EqualityComparer<T>.Default.Equals(oldValue, newValue))
-                            {
-                                changes.Add(new PropertyHistory
-                                {
-                                    PropertyId = existingProperty.Id,
-                                    Field = fieldName,
-                                    OldValue = oldValue?.ToString(),
-                                    NewValue = newValue?.ToString(),
-                                    ChangedAt = now
-                                });
-                            }
-                        }
-
-                        CheckChange("Title", existingProperty.Title, parsedProperty.Title);
-                        CheckChange("Description", existingProperty.Description, parsedProperty.Description);
-                        CheckChange("Price", existingProperty.Price, parsedProperty.Price);
-                        CheckChange("ZipCode", existingProperty.ZipCode, parsedProperty.ZipCode);
-                        CheckChange("City", existingProperty.City, parsedProperty.City);
-                        CheckChange("Bedrooms", existingProperty.Bedrooms, parsedProperty.Bedrooms);
-                        CheckChange("LivingArea", existingProperty.LivingArea, parsedProperty.LivingArea);
-                        CheckChange("PlotArea", existingProperty.PlotArea, parsedProperty.PlotArea);
-                        CheckChange("ImageUrl", existingProperty.ImageUrl, parsedProperty.ImageUrl);
-                        CheckChange("EpcScore", existingProperty.EpcScore, parsedProperty.EpcScore);
-                        CheckChange("Sold", existingProperty.Sold, parsedProperty.Sold);
-                        CheckChange("UnderOption", existingProperty.UnderOption, parsedProperty.UnderOption);
-
+                        var changes = RecordChanges(existingProperty, parsedProperty, now);
                         if (changes.Any())
                         {
                             _context.PropertyHistories.AddRange(changes);
                             _logger.LogInformation("Recorded {Count} changes for property {PropertyId}", changes.Count, existingProperty.Id);
                         }
-
-                        // Update existing property fields
-                        existingProperty.Title = parsedProperty.Title;
-                        existingProperty.Description = parsedProperty.Description;
-                        existingProperty.Price = parsedProperty.Price;
-                        existingProperty.ZipCode = parsedProperty.ZipCode;
-                        existingProperty.City = parsedProperty.City;
-                        existingProperty.Bedrooms = parsedProperty.Bedrooms;
-                        existingProperty.LivingArea = parsedProperty.LivingArea;
-                        existingProperty.PlotArea = parsedProperty.PlotArea;
-                        existingProperty.ImageUrl = parsedProperty.ImageUrl;
-                        existingProperty.EpcScore = parsedProperty.EpcScore;
-                        existingProperty.ExternalId = parsedProperty.ExternalId;
-                        existingProperty.RawPageId = page.Id;
-                        existingProperty.Sold = parsedProperty.Sold;
-                        existingProperty.UnderOption = parsedProperty.UnderOption;
-                        existingProperty.AgencyId = page.AgencyId;
-                        existingProperty.LastUpdatedAt = DateTime.UtcNow;
+                        CopyFields(existingProperty, parsedProperty, page.Id, page.AgencyId, now);
                         _logger.LogInformation("Successfully updated property from {Url}", page.Url);
                     }
                     else
                     {
-                        parsedProperty.RawPageId = page.Id;
-                        parsedProperty.AgencyId = page.AgencyId;
-                        parsedProperty.CreatedAt = DateTime.UtcNow;
-                        parsedProperty.LastUpdatedAt = DateTime.UtcNow;
+                        parsedProperty.RawPageId     = page.Id;
+                        parsedProperty.AgencyId      = page.AgencyId;
+                        parsedProperty.CreatedAt     = now;
+                        parsedProperty.LastUpdatedAt = now;
                         _context.Properties.Add(parsedProperty);
                         _logger.LogInformation("Successfully parsed new property from {Url}", page.Url);
                     }
@@ -301,5 +212,56 @@ public class ParserService
                 _logger.LogError(ex, "Error parsing page {Url}", page.Url);
             }
         }
+    }
+
+    private static List<PropertyHistory> RecordChanges(Property existing, Property incoming, DateTime now)
+    {
+        var changes = new List<PropertyHistory>();
+        void Check<T>(string field, T old, T current)
+        {
+            if (!EqualityComparer<T>.Default.Equals(old, current))
+                changes.Add(new PropertyHistory
+                {
+                    PropertyId = existing.Id,
+                    Field      = field,
+                    OldValue   = old?.ToString(),
+                    NewValue   = current?.ToString(),
+                    ChangedAt  = now
+                });
+        }
+        Check("Title",       existing.Title,       incoming.Title);
+        Check("Description", existing.Description, incoming.Description);
+        Check("Price",       existing.Price,       incoming.Price);
+        Check("ZipCode",     existing.ZipCode,     incoming.ZipCode);
+        Check("City",        existing.City,        incoming.City);
+        Check("Bedrooms",    existing.Bedrooms,    incoming.Bedrooms);
+        Check("LivingArea",  existing.LivingArea,  incoming.LivingArea);
+        Check("PlotArea",    existing.PlotArea,    incoming.PlotArea);
+        Check("ImageUrl",    existing.ImageUrl,    incoming.ImageUrl);
+        Check("EpcScore",    existing.EpcScore,    incoming.EpcScore);
+        Check("Sold",        existing.Sold,        incoming.Sold);
+        Check("UnderOption", existing.UnderOption, incoming.UnderOption);
+        return changes;
+    }
+
+    private static void CopyFields(Property existing, Property incoming, int rawPageId, int? agencyId, DateTime now)
+    {
+        existing.Title         = incoming.Title;
+        existing.Description   = incoming.Description;
+        existing.Price         = incoming.Price;
+        existing.ZipCode       = incoming.ZipCode;
+        existing.City          = incoming.City;
+        existing.Bedrooms      = incoming.Bedrooms;
+        existing.LivingArea    = incoming.LivingArea;
+        existing.PlotArea      = incoming.PlotArea;
+        existing.ImageUrl      = incoming.ImageUrl;
+        existing.EpcScore      = incoming.EpcScore;
+        existing.SourceUrl     = incoming.SourceUrl;
+        existing.ExternalId    = incoming.ExternalId;
+        existing.Sold          = incoming.Sold;
+        existing.UnderOption   = incoming.UnderOption;
+        existing.RawPageId     = rawPageId;
+        existing.AgencyId      = agencyId;
+        existing.LastUpdatedAt = now;
     }
 }
