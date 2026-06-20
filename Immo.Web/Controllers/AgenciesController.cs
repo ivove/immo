@@ -653,10 +653,9 @@ public class AgenciesController : Controller
             }
             else
             {
-                var (configId, agencyId) = (existing.ParserConfig.Id, existing.ParserConfig.AgencyId);
+                imported.ParserConfig.Id = existing.ParserConfig.Id;
+                imported.ParserConfig.AgencyId = existing.ParserConfig.AgencyId;
                 _context.Entry(existing.ParserConfig).CurrentValues.SetValues(imported.ParserConfig);
-                existing.ParserConfig.Id = configId;
-                existing.ParserConfig.AgencyId = agencyId;
             }
         }
 

@@ -47,17 +47,18 @@ public class HomeController : Controller
     }
 
     public async Task<IActionResult> Index(
-        decimal? minPrice, decimal? maxPrice, 
-        List<string>? zipCodes, 
-        int? minBedrooms, 
-        double? minLivingArea, 
+        decimal? minPrice, decimal? maxPrice,
+        List<string>? zipCodes,
+        int? minBedrooms,
+        double? minLivingArea,
         double? minPlotArea,
         string? maxEpc,
+        int? agencyId,
         string? status = "available",
         string? recency = null)
     {
-        _logger.LogInformation("Property search requested. Filters - Price: [{MinPrice} - {MaxPrice}], Postal Codes: [{ZipCodes}], Beds: >= {MinBedrooms}, Area: >= {MinLivingArea} m², EPC: <= {MaxEpc}, Status: {Status}, Recency: {Recency}",
-            minPrice, maxPrice, zipCodes != null ? string.Join(", ", zipCodes) : "All", minBedrooms, minLivingArea, maxEpc, status, recency ?? "Anytime");
+        _logger.LogInformation("Property search requested. Filters - Price: [{MinPrice} - {MaxPrice}], Postal Codes: [{ZipCodes}], Beds: >= {MinBedrooms}, Area: >= {MinLivingArea} m², EPC: <= {MaxEpc}, Agency: {AgencyId}, Status: {Status}, Recency: {Recency}",
+            minPrice, maxPrice, zipCodes != null ? string.Join(", ", zipCodes) : "All", minBedrooms, minLivingArea, maxEpc, agencyId, status, recency ?? "Anytime");
         var settings = await _context.AppSettings.FirstOrDefaultAsync() ?? new AppSettings();
         var thresholdDays = settings.NewOrUpdatedThresholdDays;
         var thresholdDate = DateTime.UtcNow.AddDays(-thresholdDays);
@@ -103,6 +104,7 @@ public class HomeController : Controller
         if (minBedrooms.HasValue) query = query.Where(p => p.Bedrooms >= minBedrooms.Value);
         if (minLivingArea.HasValue) query = query.Where(p => p.LivingArea >= minLivingArea.Value);
         if (minPlotArea.HasValue) query = query.Where(p => p.PlotArea >= minPlotArea.Value);
+        if (agencyId.HasValue) query = query.Where(p => p.AgencyId == agencyId.Value);
 
         if (!string.IsNullOrEmpty(maxEpc))
         {
@@ -133,6 +135,11 @@ public class HomeController : Controller
             .OrderBy(l => l.ZipCode)
             .ToList();
 
+        var agencies = await _context.Agencies
+            .OrderBy(a => a.AgencyDomain)
+            .Select(a => new { a.Id, a.AgencyDomain })
+            .ToListAsync();
+
         // Pass filter values back to the view
         ViewBag.MinPrice = minPrice;
         ViewBag.MaxPrice = maxPrice;
@@ -142,6 +149,8 @@ public class HomeController : Controller
         ViewBag.MinLivingArea = minLivingArea;
         ViewBag.MinPlotArea = minPlotArea;
         ViewBag.MaxEpc = maxEpc;
+        ViewBag.AgencyId = agencyId;
+        ViewBag.Agencies = agencies;
         ViewBag.Status = status;
         ViewBag.Recency = recency;
         ViewBag.ThresholdDays = thresholdDays;

@@ -127,6 +127,19 @@
                         <option value="new_or_updated" selected="@(ViewBag.Recency == "new_or_updated")">New/Updated</option>
                     </select>
                 </div>
+                <div class="col-md-3 col-lg-2">
+                    <label class="form-label fw-bold small text-muted text-uppercase">Agency</label>
+                    <select name="agencyId" class="form-select">
+                        <option value="">All</option>
+                        @if (ViewBag.Agencies != null)
+                        {
+                            foreach (dynamic agency in ViewBag.Agencies)
+                            {
+                                <option value="@agency.Id" selected="@(ViewBag.AgencyId != null && ViewBag.AgencyId == agency.Id)">@agency.AgencyDomain</option>
+                            }
+                        }
+                    </select>
+                </div>
                 <div class="col-md-12 col-lg-2">
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary w-100 fw-bold">
@@ -440,6 +453,7 @@
                 minLivingArea: form.minLivingArea.value,
                 minPlotArea:   form.minPlotArea.value,
                 maxEpc:        form.maxEpc.value,
+                agencyId:      form.agencyId.value,
                 status:        form.status.value,
                 recency:       form.recency.value,
                 zipCodes:      Array.from(document.querySelectorAll('.zip-option-item.selected')).map(i => i.dataset.zip)
@@ -454,6 +468,7 @@
             form.minLivingArea.value = filters.minLivingArea || '';
             form.minPlotArea.value   = filters.minPlotArea   || '';
             form.maxEpc.value        = filters.maxEpc        || '';
+            form.agencyId.value      = filters.agencyId      || '';
             form.status.value        = filters.status        || 'all';
             form.recency.value       = filters.recency       || '';
 
