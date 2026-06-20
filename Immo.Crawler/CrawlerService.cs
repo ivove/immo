@@ -258,20 +258,17 @@ public class CrawlerService
 
     public async Task CrawlListingPageAsync(string listingUrl, string agencyUrl = "", int? agencyId = null)
     {
-        if (agencyUrl == "") { agencyUrl = listingUrl; }
-        
+        if (agencyUrl == "") agencyUrl = listingUrl;
         if (_visitedListingUrls.Contains(listingUrl)) return;
         _visitedListingUrls.Add(listingUrl);
 
         try
         {
             _logger.LogInformation("Crawling LISTING page: {Url}...", listingUrl);
-
             await ApplyRateLimit();
 
             using var response = await FetchResponseAsync(listingUrl);
             response.EnsureSuccessStatusCode();
-
             var htmlContent = await response.Content.ReadAsStringAsync();
 
             var extractor = _extractors.FirstOrDefault(e => e.CanExtract(listingUrl));
@@ -281,58 +278,46 @@ public class CrawlerService
                 return;
             }
 
-            var propertyLinks = extractor.ExtractLinks(htmlContent, listingUrl,agencyUrl).ToList();
+            agencyId ??= ResolveAgencyId(listingUrl);
+
+            var propertyLinks = extractor.ExtractLinks(htmlContent, listingUrl, agencyUrl).ToList();
             _logger.LogInformation("Found {Count} property links on {Url}", propertyLinks.Count, listingUrl);
-
-            // Find agencyId if not provided
-            if (agencyId == null)
-            {
-                var agencyUri = new Uri(listingUrl);
-                var agencyDomain = agencyUri.Host.Replace("www.", "");
-                var tempAgency = _context.Agencies.FirstOrDefault(a => a.AgencyDomain.Contains(agencyDomain));
-                agencyId = tempAgency?.Id;
-            }
-
-            var count = 0;
             foreach (var link in propertyLinks)
-            {
                 await CrawlPageAsync(link, agencyId);
-                count++;
-            }
 
-            // Pagination logic
-            var uri = new Uri(listingUrl);
-            var domain = uri.Host.Replace("www.", "");
-            var agency = _context.Agencies.FirstOrDefault(a => a.AgencyDomain.Contains(domain));
-
+            var agency = _context.Agencies.FirstOrDefault(a => a.AgencyDomain.Contains(new Uri(listingUrl).Host.Replace("www.", "")));
             if (agency?.PaginationSelector != null)
-            {
-                var doc = new HtmlDocument();
-                doc.LoadHtml(htmlContent);
-                var paginationNodes = doc.DocumentNode.SelectNodes(agency.PaginationSelector);
-                
-                if (paginationNodes != null)
-                {
-                    var paginationLinks = paginationNodes
-                        .Select(n => n.GetAttributeValue("href", ""))
-                        .Where(href => !string.IsNullOrEmpty(href))
-                        .Select(href => new Uri(new Uri(listingUrl), href).ToString())
-                        .Distinct()
-                        .ToList();
-
-                    _logger.LogInformation("Found {Count} pagination links on {Url}", paginationLinks.Count, listingUrl);
-
-                    foreach (var pLink in paginationLinks)
-                    {
-                        await CrawlListingPageAsync(pLink, agencyUrl, agencyId);
-                    }
-                }
-            }
+                await FollowPaginationAsync(htmlContent, listingUrl, agencyUrl, agencyId, agency.PaginationSelector);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error crawling listing page {Url}", listingUrl);
         }
+    }
+
+    private int? ResolveAgencyId(string url)
+    {
+        var domain = new Uri(url).Host.Replace("www.", "");
+        return _context.Agencies.FirstOrDefault(a => a.AgencyDomain.Contains(domain))?.Id;
+    }
+
+    private async Task FollowPaginationAsync(string html, string listingUrl, string agencyUrl, int? agencyId, string paginationSelector)
+    {
+        var doc = new HtmlDocument();
+        doc.LoadHtml(html);
+        var nodes = doc.DocumentNode.SelectNodes(paginationSelector);
+        if (nodes == null) return;
+
+        var paginationLinks = nodes
+            .Select(n => n.GetAttributeValue("href", ""))
+            .Where(href => !string.IsNullOrEmpty(href))
+            .Select(href => new Uri(new Uri(listingUrl), href).ToString())
+            .Distinct()
+            .ToList();
+
+        _logger.LogInformation("Found {Count} pagination links on {Url}", paginationLinks.Count, listingUrl);
+        foreach (var pLink in paginationLinks)
+            await CrawlListingPageAsync(pLink, agencyUrl, agencyId);
     }
 
     public async Task CheckUnseenPagesAsync()
