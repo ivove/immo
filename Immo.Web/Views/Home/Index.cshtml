@@ -127,6 +127,19 @@
                         <option value="new_or_updated" selected="@(ViewBag.Recency == "new_or_updated")">New/Updated</option>
                     </select>
                 </div>
+                <div class="col-md-3 col-lg-2">
+                    <label class="form-label fw-bold small text-muted text-uppercase">Agency</label>
+                    <select name="agencyId" class="form-select">
+                        <option value="">All</option>
+                        @if (ViewBag.Agencies != null)
+                        {
+                            foreach (dynamic agency in ViewBag.Agencies)
+                            {
+                                <option value="@agency.Id" selected="@(ViewBag.AgencyId != null && ViewBag.AgencyId == agency.Id)">@agency.AgencyDomain</option>
+                            }
+                        }
+                    </select>
+                </div>
                 <div class="col-md-12 col-lg-2">
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary w-100 fw-bold">
@@ -135,9 +148,18 @@
                         <a href="@Url.Action("Index")" class="btn btn-outline-secondary px-3" title="Clear Filters">
                             <i class="bi bi-x-lg"></i>
                         </a>
+                        <button type="button" id="saveFilterBtn" class="btn btn-outline-success px-3" title="Save current filter">
+                            <i class="bi bi-bookmark-plus"></i>
+                        </button>
                     </div>
                 </div>
             </form>
+            <div id="savedFiltersRow" class="mt-3 pt-3 border-top" style="display:none">
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <small class="text-muted fw-bold text-uppercase me-1"><i class="bi bi-bookmark me-1"></i>Saved:</small>
+                    <div id="savedFilterChips" class="d-flex flex-wrap gap-2"></div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -414,6 +436,100 @@
         dropdown.addEventListener('shown.bs.dropdown', function () {
             searchInput.focus();
         });
+
+        // ── Saved Filters ──────────────────────────────────────────────────────
+        const FILTER_KEY = 'immo_saved_filters';
+
+        function getSaved() {
+            try { return JSON.parse(localStorage.getItem(FILTER_KEY) || '[]'); } catch { return []; }
+        }
+
+        function collectFilters() {
+            const form = document.querySelector('form[action]');
+            return {
+                minPrice:      form.minPrice.value,
+                maxPrice:      form.maxPrice.value,
+                minBedrooms:   form.minBedrooms.value,
+                minLivingArea: form.minLivingArea.value,
+                minPlotArea:   form.minPlotArea.value,
+                maxEpc:        form.maxEpc.value,
+                agencyId:      form.agencyId.value,
+                status:        form.status.value,
+                recency:       form.recency.value,
+                zipCodes:      Array.from(document.querySelectorAll('.zip-option-item.selected')).map(i => i.dataset.zip)
+            };
+        }
+
+        function applyAndSubmit(filters) {
+            const form = document.querySelector('form[action]');
+            form.minPrice.value      = filters.minPrice      || '';
+            form.maxPrice.value      = filters.maxPrice      || '';
+            form.minBedrooms.value   = filters.minBedrooms   || '';
+            form.minLivingArea.value = filters.minLivingArea || '';
+            form.minPlotArea.value   = filters.minPlotArea   || '';
+            form.maxEpc.value        = filters.maxEpc        || '';
+            form.agencyId.value      = filters.agencyId      || '';
+            form.status.value        = filters.status        || 'all';
+            form.recency.value       = filters.recency       || '';
+
+            document.querySelectorAll('.zip-option-item').forEach(item => {
+                const sel = (filters.zipCodes || []).includes(item.dataset.zip);
+                item.classList.toggle('selected', sel);
+                item.querySelector('.zip-cb').checked = sel;
+            });
+            updateDisplay();
+            form.submit();
+        }
+
+        function renderSaved() {
+            const saved = getSaved();
+            const row   = document.getElementById('savedFiltersRow');
+            const chips = document.getElementById('savedFilterChips');
+
+            if (!saved.length) { row.style.display = 'none'; return; }
+            row.style.display = '';
+
+            chips.innerHTML = saved.map(f =>
+                `<span class="badge bg-secondary rounded-pill px-3 py-2 saved-filter-chip" data-name="${f.name}" role="button" title="Load filter">` +
+                    `<i class="bi bi-bookmark-fill me-1"></i>${f.name}` +
+                    `<button type="button" class="btn-close btn-close-white ms-2 p-0 delete-saved-filter" data-name="${f.name}" style="font-size:.6rem" aria-label="Delete"></button>` +
+                `</span>`
+            ).join('');
+
+            chips.querySelectorAll('.saved-filter-chip').forEach(chip => {
+                chip.addEventListener('click', e => {
+                    const delBtn = e.target.closest('.delete-saved-filter');
+                    if (delBtn) {
+                        e.stopPropagation();
+                        const name = delBtn.dataset.name;
+                        const updated = getSaved().filter(f => f.name !== name);
+                        localStorage.setItem(FILTER_KEY, JSON.stringify(updated));
+                        renderSaved();
+                        return;
+                    }
+                    const entry = getSaved().find(f => f.name === chip.dataset.name);
+                    if (entry) applyAndSubmit(entry.filters);
+                });
+            });
+        }
+
+        document.getElementById('saveFilterBtn').addEventListener('click', () => {
+            const name = prompt('Name for this filter:');
+            if (!name || !name.trim()) return;
+            const trimmed = name.trim();
+            const saved   = getSaved();
+            const existing = saved.findIndex(f => f.name === trimmed);
+            if (existing >= 0) {
+                if (!confirm(`Overwrite saved filter "${trimmed}"?`)) return;
+                saved[existing] = { name: trimmed, filters: collectFilters() };
+            } else {
+                saved.push({ name: trimmed, filters: collectFilters() });
+            }
+            localStorage.setItem(FILTER_KEY, JSON.stringify(saved));
+            renderSaved();
+        });
+
+        renderSaved();
     });
 </script>
 
