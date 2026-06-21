@@ -1,0 +1,955 @@
+@model Immo.Data.Entities.ParserConfig
+
+@{
+    ViewData["Title"] = "Visual JSON Config Builder";
+}
+
+<style>
+    .visual-builder {
+        height: calc(100vh - 130px);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .builder-topbar {
+        flex-shrink: 0;
+        background: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+        padding: 0.6rem 1rem;
+    }
+
+    .builder-main {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+    }
+
+    .builder-sidebar {
+        width: 350px;
+        min-width: 350px;
+        overflow-y: auto;
+        border-right: 1px solid #dee2e6;
+        padding: 0.75rem;
+        background: #fff;
+    }
+
+    .builder-preview {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        background: #1e1e2e;
+        overflow: hidden;
+    }
+
+    .builder-overlay {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        color: #888;
+        pointer-events: none;
+    }
+
+    /* ── JSON tree ────────────────────────────────────────────────────── */
+    .json-tree-header {
+        flex-shrink: 0;
+        background: #181825;
+        border-bottom: 1px solid #313244;
+        padding: 0.4rem 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    #jsonTreePanel {
+        flex: 1;
+        overflow: auto;
+        padding: 0.85rem 1rem;
+        font-family: 'Consolas', 'Courier New', monospace;
+        font-size: 0.79rem;
+        line-height: 1.65;
+        color: #cdd6f4;
+        display: none;
+    }
+
+    .json-root, .json-children {
+        list-style: none;
+        padding-left: 1.4em;
+        margin: 0;
+    }
+    .json-root { padding-left: 0; }
+    .json-item { padding: 0; }
+
+    /* details / summary */
+    details.jdet > summary {
+        display: inline;
+        list-style: none;
+        cursor: default;
+    }
+    details.jdet > summary::-webkit-details-marker { display: none; }
+
+    .json-toggle {
+        display: inline-block;
+        width: 0.9em;
+        text-align: center;
+        color: #585b70;
+        font-size: 0.6rem;
+        cursor: pointer;
+        user-select: none;
+        vertical-align: middle;
+        transition: transform 0.12s;
+    }
+    details.jdet[open] > summary .json-toggle { transform: rotate(90deg); }
+
+    .jnode {
+        cursor: pointer;
+        border-radius: 3px;
+        padding: 0 3px;
+        transition: background 0.08s;
+    }
+    .jnode:hover { background: rgba(137,180,250,0.12); }
+    .jnode-picked { background: rgba(137,180,250,0.28) !important; outline: 1px solid #89b4fa; border-radius: 3px; }
+
+    .json-key   { color: #89b4fe; }
+    .json-str   { color: #a6e3a1; }
+    .json-num   { color: #fab387; }
+    .json-bool  { color: #89dceb; }
+    .json-null  { color: #6c7086; }
+    .json-hint  { color: #585b70; font-size: 0.72em; margin-left: 0.25em; }
+
+    .json-pick-icon {
+        opacity: 0;
+        color: #89b4fa;
+        font-size: 0.6rem;
+        margin-left: 4px;
+        vertical-align: middle;
+        pointer-events: none;
+        transition: opacity 0.08s;
+    }
+    .picking-active .jnode:hover .json-pick-icon { opacity: 0.85; }
+    .picking-active .jnode-picked .json-pick-icon { opacity: 1; }
+
+    /* ── Sidebar fields ───────────────────────────────────────────────── */
+    .path-input.active-pick {
+        border-color: #4361ee !important;
+        box-shadow: 0 0 0 0.2rem rgba(67,97,238,0.25) !important;
+    }
+
+    .pick-btn.active {
+        background-color: #4361ee;
+        border-color: #4361ee;
+        color: #fff;
+    }
+
+    .pick-btn-val.active {
+        background-color: #e67e22;
+        border-color: #e67e22;
+        color: #fff;
+    }
+
+    .pick-hint {
+        font-size: 0.7rem;
+        color: #6c757d;
+        margin-top: 0.1rem;
+        font-style: italic;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+
+    .section-title {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #868e96;
+        margin: 0.85rem 0 0.4rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid #f0f0f0;
+    }
+    .section-title:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+
+    .field-row { margin-bottom: 0.45rem; }
+    .field-row > label {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.15rem;
+        display: block;
+    }
+</style>
+
+<div class="visual-builder">
+
+    <!-- Top bar -->
+    <div class="builder-topbar d-flex align-items-center gap-2 flex-wrap">
+        <a asp-action="Edit" asp-route-id="@Model.AgencyId" class="btn btn-sm btn-outline-secondary" title="Back to agency">
+            <i class="bi bi-arrow-left"></i>
+        </a>
+        <span class="fw-semibold text-muted small text-truncate" style="max-width:160px" title="@ViewBag.AgencyDomain">@ViewBag.AgencyDomain</span>
+        <input type="text" id="urlInput" class="form-control form-control-sm"
+               placeholder="https://api.example.com/v1/properties"
+               value="@ViewBag.ApiListingUrl"
+               style="max-width:480px" autocomplete="off" />
+        <button id="loadBtn" class="btn btn-sm btn-primary" style="white-space:nowrap">
+            <i class="bi bi-play-fill me-1"></i>Load
+        </button>
+        <button id="parseBtn" class="btn btn-sm btn-outline-success" style="white-space:nowrap" disabled
+                data-bs-toggle="modal" data-bs-target="#parseModal">
+            <i class="bi bi-search me-1"></i>Parse
+        </button>
+        <span class="vr d-none d-md-block"></span>
+        <span id="statusMsg" class="text-muted small d-none d-md-inline">
+            Focus a field on the left, then click a node in the JSON tree
+        </span>
+    </div>
+
+    <!-- Main content -->
+    <div class="builder-main">
+
+        <!-- Left sidebar: config form -->
+        <div class="builder-sidebar">
+            <form asp-action="EditParserConfig" method="post" id="configForm">
+                <input type="hidden" asp-for="Id" />
+                <input type="hidden" asp-for="AgencyId" />
+
+                <!-- Array & Identity -->
+                <div class="section-title">Array &amp; Identity</div>
+
+                <div class="field-row">
+                    <label>Items Array Path <span class="text-muted fw-normal">(path to the array)</span></label>
+                    <div class="input-group input-group-sm">
+                        <input name="JsonArrayPath" id="f_JsonArrayPath" value="@Model.JsonArrayPath"
+                               class="form-control path-input" placeholder="data" data-label="Items Array" data-pick-mode="path" autocomplete="off" />
+                        <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_JsonArrayPath" title="Pick path from tree">
+                            <i class="bi bi-cursor"></i>
+                        </button>
+                    </div>
+                    <div class="pick-hint" id="hint_JsonArrayPath"></div>
+                </div>
+
+                <div class="field-row">
+                    <label>Detail URL Path</label>
+                    <div class="input-group input-group-sm">
+                        <input name="JsonUrlPath" id="f_JsonUrlPath" value="@Model.JsonUrlPath"
+                               class="form-control path-input" placeholder="detailUrl" data-label="Detail URL" data-pick-mode="path" autocomplete="off" />
+                        <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_JsonUrlPath" title="Pick path from tree">
+                            <i class="bi bi-cursor"></i>
+                        </button>
+                    </div>
+                    <div class="pick-hint" id="hint_JsonUrlPath"></div>
+                </div>
+
+                <div class="field-row">
+                    <label>Detail URL Template <span class="text-muted fw-normal">({id}, {title}…)</span></label>
+                    <input name="JsonDetailUrlTemplate" value="@Model.JsonDetailUrlTemplate"
+                           class="form-control form-control-sm" placeholder="https://agency.com/properties/{id}" autocomplete="off" />
+                </div>
+
+                <div class="field-row">
+                    <label>External ID Path</label>
+                    <div class="input-group input-group-sm">
+                        <input name="JsonExternalIdPath" id="f_JsonExternalIdPath" value="@Model.JsonExternalIdPath"
+                               class="form-control path-input" placeholder="id" data-label="External ID" data-pick-mode="path" autocomplete="off" />
+                        <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_JsonExternalIdPath" title="Pick path from tree">
+                            <i class="bi bi-cursor"></i>
+                        </button>
+                    </div>
+                    <div class="pick-hint" id="hint_JsonExternalIdPath"></div>
+                </div>
+
+                <!-- Type Filter -->
+                <div class="section-title">Type Filter</div>
+
+                <div class="field-row">
+                    <label>Type Field Path</label>
+                    <div class="input-group input-group-sm">
+                        <input name="JsonTypeFilterPath" id="f_JsonTypeFilterPath" value="@Model.JsonTypeFilterPath"
+                               class="form-control path-input" placeholder="type" data-label="Type Field" data-pick-mode="path" autocomplete="off" />
+                        <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_JsonTypeFilterPath" title="Pick path from tree">
+                            <i class="bi bi-cursor"></i>
+                        </button>
+                    </div>
+                    <div class="pick-hint" id="hint_JsonTypeFilterPath"></div>
+                </div>
+
+                <div class="field-row">
+                    <label>Accepted Types <span class="text-muted fw-normal">(comma-separated)</span></label>
+                    <div class="input-group input-group-sm">
+                        <input name="JsonTypeFilterValues" id="f_JsonTypeFilterValues" value="@Model.JsonTypeFilterValues"
+                               class="form-control path-input" placeholder="house,apartment" data-label="Accepted Type Value" data-pick-mode="value" autocomplete="off" />
+                        <button type="button" class="btn btn-outline-warning pick-btn" data-field="f_JsonTypeFilterValues" title="Pick value from tree (orange = picks value, not path)">
+                            <i class="bi bi-tag"></i>
+                        </button>
+                    </div>
+                    <div class="pick-hint" id="hint_JsonTypeFilterValues"></div>
+                </div>
+
+                <!-- Status Detection -->
+                <div class="section-title">Status Detection</div>
+
+                <div class="field-row">
+                    <label>Status Field Path</label>
+                    <div class="input-group input-group-sm">
+                        <input name="JsonStatusPath" id="f_JsonStatusPath" value="@Model.JsonStatusPath"
+                               class="form-control path-input" placeholder="status" data-label="Status Field" data-pick-mode="path" autocomplete="off" />
+                        <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_JsonStatusPath" title="Pick path from tree">
+                            <i class="bi bi-cursor"></i>
+                        </button>
+                    </div>
+                    <div class="pick-hint" id="hint_JsonStatusPath"></div>
+                </div>
+
+                <div class="row g-1 mb-1">
+                    <div class="col-6 field-row">
+                        <label>Sold Value</label>
+                        <div class="input-group input-group-sm">
+                            <input name="JsonSoldValue" id="f_JsonSoldValue" value="@Model.JsonSoldValue"
+                                   class="form-control path-input" placeholder="sold" data-label="Sold Value" data-pick-mode="value" autocomplete="off" />
+                            <button type="button" class="btn btn-outline-warning pick-btn" data-field="f_JsonSoldValue" title="Pick value from tree">
+                                <i class="bi bi-tag"></i>
+                            </button>
+                        </div>
+                        <div class="pick-hint" id="hint_JsonSoldValue"></div>
+                    </div>
+                    <div class="col-6 field-row">
+                        <label>Under Option Value</label>
+                        <div class="input-group input-group-sm">
+                            <input name="JsonUnderOptionValue" id="f_JsonUnderOptionValue" value="@Model.JsonUnderOptionValue"
+                                   class="form-control path-input" placeholder="option" data-label="Under Option Value" data-pick-mode="value" autocomplete="off" />
+                            <button type="button" class="btn btn-outline-warning pick-btn" data-field="f_JsonUnderOptionValue" title="Pick value from tree">
+                                <i class="bi bi-tag"></i>
+                            </button>
+                        </div>
+                        <div class="pick-hint" id="hint_JsonUnderOptionValue"></div>
+                    </div>
+                </div>
+
+                <!-- Field Paths -->
+                <div class="section-title">Field Paths</div>
+
+                <div class="field-row">
+                    <label>Title</label>
+                    <div class="input-group input-group-sm">
+                        <input name="JsonTitlePath" id="f_JsonTitlePath" value="@Model.JsonTitlePath"
+                               class="form-control path-input" placeholder="title" data-label="Title" data-pick-mode="path" autocomplete="off" />
+                        <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_JsonTitlePath" title="Pick path from tree">
+                            <i class="bi bi-cursor"></i>
+                        </button>
+                    </div>
+                    <div class="pick-hint" id="hint_JsonTitlePath"></div>
+                </div>
+
+                <div class="field-row">
+                    <label>Price</label>
+                    <div class="input-group input-group-sm">
+                        <input name="JsonPricePath" id="f_JsonPricePath" value="@Model.JsonPricePath"
+                               class="form-control path-input" placeholder="price.amount" data-label="Price" data-pick-mode="path" autocomplete="off" />
+                        <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_JsonPricePath" title="Pick path from tree">
+                            <i class="bi bi-cursor"></i>
+                        </button>
+                    </div>
+                    <div class="pick-hint" id="hint_JsonPricePath"></div>
+                </div>
+
+                <div class="field-row">
+                    <label>Description</label>
+                    <div class="input-group input-group-sm">
+                        <input name="JsonDescriptionPath" id="f_JsonDescriptionPath" value="@Model.JsonDescriptionPath"
+                               class="form-control path-input" placeholder="description" data-label="Description" data-pick-mode="path" autocomplete="off" />
+                        <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_JsonDescriptionPath" title="Pick path from tree">
+                            <i class="bi bi-cursor"></i>
+                        </button>
+                    </div>
+                    <div class="pick-hint" id="hint_JsonDescriptionPath"></div>
+                </div>
+
+                <div class="field-row">
+                    <label>Image URL</label>
+                    <div class="input-group input-group-sm">
+                        <input name="JsonImagePath" id="f_JsonImagePath" value="@Model.JsonImagePath"
+                               class="form-control path-input" placeholder="photos[0].url" data-label="Image URL" data-pick-mode="path" autocomplete="off" />
+                        <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_JsonImagePath" title="Pick path from tree">
+                            <i class="bi bi-cursor"></i>
+                        </button>
+                    </div>
+                    <div class="pick-hint" id="hint_JsonImagePath"></div>
+                </div>
+
+                <div class="field-row">
+                    <label>Bedrooms</label>
+                    <div class="input-group input-group-sm">
+                        <input name="JsonBedroomsPath" id="f_JsonBedroomsPath" value="@Model.JsonBedroomsPath"
+                               class="form-control path-input" placeholder="specs.bedrooms" data-label="Bedrooms" data-pick-mode="path" autocomplete="off" />
+                        <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_JsonBedroomsPath" title="Pick path from tree">
+                            <i class="bi bi-cursor"></i>
+                        </button>
+                    </div>
+                    <div class="pick-hint" id="hint_JsonBedroomsPath"></div>
+                </div>
+
+                <div class="row g-1 mb-1">
+                    <div class="col-6 field-row">
+                        <label>Living Area</label>
+                        <div class="input-group input-group-sm">
+                            <input name="JsonLivingAreaPath" id="f_JsonLivingAreaPath" value="@Model.JsonLivingAreaPath"
+                                   class="form-control path-input" placeholder="specs.livingArea" data-label="Living Area" data-pick-mode="path" autocomplete="off" />
+                            <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_JsonLivingAreaPath" title="Pick path from tree">
+                                <i class="bi bi-cursor"></i>
+                            </button>
+                        </div>
+                        <div class="pick-hint" id="hint_JsonLivingAreaPath"></div>
+                    </div>
+                    <div class="col-6 field-row">
+                        <label>Plot Area</label>
+                        <div class="input-group input-group-sm">
+                            <input name="JsonPlotAreaPath" id="f_JsonPlotAreaPath" value="@Model.JsonPlotAreaPath"
+                                   class="form-control path-input" placeholder="specs.plotArea" data-label="Plot Area" data-pick-mode="path" autocomplete="off" />
+                            <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_JsonPlotAreaPath" title="Pick path from tree">
+                                <i class="bi bi-cursor"></i>
+                            </button>
+                        </div>
+                        <div class="pick-hint" id="hint_JsonPlotAreaPath"></div>
+                    </div>
+                </div>
+
+                <div class="field-row">
+                    <label>EPC Score</label>
+                    <div class="input-group input-group-sm">
+                        <input name="JsonEpcPath" id="f_JsonEpcPath" value="@Model.JsonEpcPath"
+                               class="form-control path-input" placeholder="epc.score" data-label="EPC Score" data-pick-mode="path" autocomplete="off" />
+                        <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_JsonEpcPath" title="Pick path from tree">
+                            <i class="bi bi-cursor"></i>
+                        </button>
+                    </div>
+                    <div class="pick-hint" id="hint_JsonEpcPath"></div>
+                </div>
+
+                <div class="row g-1 mb-1">
+                    <div class="col-6 field-row">
+                        <label>Zip Code</label>
+                        <div class="input-group input-group-sm">
+                            <input name="JsonZipCodePath" id="f_JsonZipCodePath" value="@Model.JsonZipCodePath"
+                                   class="form-control path-input" placeholder="address.zip" data-label="Zip Code" data-pick-mode="path" autocomplete="off" />
+                            <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_JsonZipCodePath" title="Pick path from tree">
+                                <i class="bi bi-cursor"></i>
+                            </button>
+                        </div>
+                        <div class="pick-hint" id="hint_JsonZipCodePath"></div>
+                    </div>
+                    <div class="col-6 field-row">
+                        <label>City</label>
+                        <div class="input-group input-group-sm">
+                            <input name="JsonCityPath" id="f_JsonCityPath" value="@Model.JsonCityPath"
+                                   class="form-control path-input" placeholder="address.city" data-label="City" data-pick-mode="path" autocomplete="off" />
+                            <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_JsonCityPath" title="Pick path from tree">
+                                <i class="bi bi-cursor"></i>
+                            </button>
+                        </div>
+                        <div class="pick-hint" id="hint_JsonCityPath"></div>
+                    </div>
+                </div>
+
+                <div class="border-top pt-3 mt-2 d-grid gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="bi bi-save me-1"></i>Save Configuration
+                    </button>
+                    <a asp-action="EditParserConfig" asp-route-agencyId="@Model.AgencyId" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-pencil me-1"></i>Open Full Editor
+                    </a>
+                </div>
+            </form>
+        </div>
+
+        <!-- Right: JSON tree panel -->
+        <div class="builder-preview">
+            <!-- Tree panel header -->
+            <div class="json-tree-header">
+                <span class="text-white small fw-semibold">JSON Response</span>
+                <div class="btn-group btn-group-sm ms-2" role="group" aria-label="View mode">
+                    <button type="button" id="viewFullBtn" class="btn btn-sm btn-outline-secondary active py-0"
+                            style="color:#cdd6f4;border-color:#313244"
+                            title="Show full JSON response">Full</button>
+                    <button type="button" id="viewItemBtn" class="btn btn-sm btn-outline-secondary py-0" disabled
+                            style="color:#cdd6f4;border-color:#313244"
+                            title="Drill into first array item — paths will be relative to that item">First Item</button>
+                </div>
+                <span id="treeInfo" class="text-muted small ms-auto" style="font-family:monospace;font-size:0.72rem"></span>
+            </div>
+
+            <div class="builder-overlay" id="overlayPlaceholder">
+                <i class="bi bi-braces" style="font-size:2.5rem;opacity:0.25;color:#cdd6f4"></i>
+                <p class="mt-3 mb-1 fw-semibold" style="color:#cdd6f4">Enter the API URL and click Load</p>
+                <p class="small text-center px-3" style="color:#888">The JSON response will appear here. Click any node to assign its path to the focused config field.</p>
+                <p class="small" style="color:#585b70">
+                    <i class="bi bi-cursor me-1"></i>Blue buttons pick the <em>path</em> &nbsp;&nbsp;
+                    <i class="bi bi-tag me-1"></i>Orange buttons pick the <em>value</em>
+                </p>
+            </div>
+            <div class="builder-overlay" id="overlayLoading" style="display:none">
+                <div class="spinner-border" role="status" style="width:2rem;height:2rem;color:#89b4fa"></div>
+                <p class="mt-3" style="color:#cdd6f4">Fetching JSON…</p>
+            </div>
+
+            <div id="jsonTreePanel"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Save toast -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:1100">
+    <div id="saveToast" class="toast align-items-center border-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body" id="saveToastMsg"></div>
+            <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    </div>
+</div>
+
+<!-- Parse result modal -->
+<div class="modal fade" id="parseModal" tabindex="-1" aria-labelledby="parseModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content rounded-4">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h5 class="modal-title fw-bold" id="parseModalLabel">
+                    <i class="bi bi-search me-2 text-success"></i>Parse Preview
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="parseModalBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2 text-muted small">Running parser…</p>
+                </div>
+            </div>
+            <div class="modal-footer border-top-0">
+                <small class="text-muted me-auto">Uses saved configuration. Save first to reflect latest changes.</small>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(function () {
+    var agencyId    = '@Model.AgencyId';
+    var urlInput    = document.getElementById('urlInput');
+    var loadBtn     = document.getElementById('loadBtn');
+    var parseBtn    = document.getElementById('parseBtn');
+    var statusMsg   = document.getElementById('statusMsg');
+    var treePanel   = document.getElementById('jsonTreePanel');
+    var treeInfo    = document.getElementById('treeInfo');
+    var overlayPlaceholder = document.getElementById('overlayPlaceholder');
+    var overlayLoading     = document.getElementById('overlayLoading');
+    var viewFullBtn = document.getElementById('viewFullBtn');
+    var viewItemBtn = document.getElementById('viewItemBtn');
+
+    var activeInput = null;
+    var jsonData    = null;       // full parsed JSON
+    var viewMode    = 'full';     // 'full' | 'item'
+    var currentUrl  = null;
+
+    // ── Activate a field for picking ─────────────────────────────────────
+    function activate(input) {
+        if (activeInput) {
+            activeInput.classList.remove('active-pick');
+            var oldBtn = document.querySelector('.pick-btn[data-field="' + activeInput.id + '"]');
+            if (oldBtn) { oldBtn.classList.remove('active'); }
+        }
+        activeInput = input;
+        treePanel.classList.toggle('picking-active', !!input);
+
+        if (!input) {
+            statusMsg.textContent = 'Focus a field on the left, then click a node in the JSON tree';
+            return;
+        }
+        input.classList.add('active-pick');
+        var btn = document.querySelector('.pick-btn[data-field="' + input.id + '"]');
+        if (btn) btn.classList.add('active');
+
+        var modeLabel = input.dataset.pickMode === 'value' ? 'value' : 'path';
+        statusMsg.textContent = 'Picking ' + modeLabel + ' for: ' + input.dataset.label + ' — click a node in the tree';
+    }
+
+    // ── Field input events ────────────────────────────────────────────────
+    document.querySelectorAll('.path-input').forEach(function (inp) {
+        inp.addEventListener('focus', function () { activate(inp); });
+        inp.addEventListener('blur', function () {
+            setTimeout(function () {
+                if (document.activeElement && document.activeElement.classList.contains('pick-btn')) return;
+                if (document.activeElement === inp) return;
+                if (activeInput === inp) activate(null);
+            }, 150);
+        });
+    });
+
+    document.querySelectorAll('.pick-btn').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            var target = document.getElementById(btn.dataset.field);
+            if (!target) return;
+            if (activeInput === target) { activate(null); }
+            else { activate(target); target.focus(); }
+        });
+    });
+
+    // ── Strip array prefix from a full path to make it item-relative ─────
+    // e.g. arrayPath="data", rawPath="data[0].price.amount" → "price.amount"
+    // For JsonArrayPath itself, or when already in item view mode, return as-is.
+    function resolvePickPath(rawPath) {
+        if (!activeInput || activeInput.name === 'JsonArrayPath') return rawPath;
+        if (viewMode === 'item') return rawPath;  // already relative in item mode
+
+        var arrayPath = (document.querySelector('input[name="JsonArrayPath"]') || {}).value || '';
+        if (!arrayPath || !rawPath) return rawPath;
+
+        var escaped = arrayPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        var re = new RegExp('^' + escaped + '\\[\\d+\\]\\.?');
+        var result = rawPath.replace(re, '');
+        return result !== rawPath ? result : rawPath;
+    }
+
+    // ── JSON tree click handler ───────────────────────────────────────────
+    treePanel.addEventListener('click', function (e) {
+        var node = e.target.closest('.jnode');
+        if (!node || !activeInput) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        var mode = activeInput.dataset.pickMode || 'path';
+        var fillWith;
+        if (mode === 'value') {
+            fillWith = node.dataset.value !== undefined && node.dataset.value !== ''
+                ? node.dataset.value
+                : resolvePickPath(node.dataset.path);  // fallback: path if no value
+        } else {
+            fillWith = resolvePickPath(node.dataset.path);
+        }
+        if (!fillWith && fillWith !== '0') return;
+
+        activeInput.value = fillWith;
+
+        // Show hint
+        var hintEl = document.getElementById('hint_' + activeInput.name);
+        if (hintEl) hintEl.textContent = mode === 'value' ? '"' + fillWith + '"' : fillWith;
+
+        // Visual feedback on the tree node
+        treePanel.querySelectorAll('.jnode-picked').forEach(function (el) { el.classList.remove('jnode-picked'); });
+        node.classList.add('jnode-picked');
+
+        // Advance to next path-input
+        var all = Array.from(document.querySelectorAll('.path-input'));
+        var idx = all.indexOf(activeInput);
+        activate(null);
+        if (idx >= 0 && idx < all.length - 1) {
+            setTimeout(function () { all[idx + 1].focus(); }, 60);
+        }
+    });
+
+    // ── Load button ───────────────────────────────────────────────────────
+    loadBtn.addEventListener('click', function () {
+        var url = urlInput.value.trim();
+        if (!url) return;
+        currentUrl  = url;
+        jsonData    = null;
+        viewMode    = 'full';
+        viewFullBtn.classList.add('active');
+        viewItemBtn.classList.remove('active');
+        viewItemBtn.disabled = true;
+        parseBtn.disabled    = true;
+        treePanel.style.display = 'none';
+        treePanel.innerHTML  = '';
+        overlayPlaceholder.style.display = 'none';
+        overlayLoading.style.display     = '';
+        loadBtn.disabled     = true;
+        loadBtn.innerHTML    = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Loading…';
+
+        fetch('/Agencies/FetchJson?agencyId=' + agencyId + '&url=' + encodeURIComponent(url))
+            .then(function (r) {
+                if (!r.ok) return r.text().then(function (t) { throw new Error(t || r.statusText); });
+                return r.json();
+            })
+            .then(function (data) {
+                jsonData = data;
+                renderTreeView();
+                overlayLoading.style.display = 'none';
+                treePanel.style.display = 'block';
+                parseBtn.disabled = false;
+                // Enable "First Item" if there's an array anywhere
+                viewItemBtn.disabled = false;
+            })
+            .catch(function (err) {
+                overlayLoading.style.display = 'none';
+                overlayPlaceholder.style.display = '';
+                overlayPlaceholder.querySelector('p').textContent = 'Failed to fetch JSON: ' + err.message;
+            })
+            .finally(function () {
+                loadBtn.disabled  = false;
+                loadBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Reload';
+            });
+    });
+
+    urlInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); loadBtn.click(); }
+    });
+
+    // ── View mode toggle ──────────────────────────────────────────────────
+    viewFullBtn.addEventListener('click', function () {
+        if (viewMode === 'full') return;
+        viewMode = 'full';
+        viewFullBtn.classList.add('active');
+        viewItemBtn.classList.remove('active');
+        renderTreeView();
+    });
+
+    viewItemBtn.addEventListener('click', function () {
+        if (viewMode === 'item') return;
+        viewMode = 'item';
+        viewItemBtn.classList.add('active');
+        viewFullBtn.classList.remove('active');
+        renderTreeView();
+    });
+
+    function renderTreeView() {
+        if (!jsonData) return;
+
+        var displayData, pathPrefix;
+
+        if (viewMode === 'item') {
+            var arrayPath = (document.querySelector('input[name="JsonArrayPath"]') || {}).value || '';
+            var arr = jsonData;
+            if (arrayPath) {
+                arrayPath.replace(/\[(\d+)\]/g, '.$1').split('.').forEach(function (k) {
+                    if (arr !== null && typeof arr === 'object') arr = arr[k];
+                });
+            }
+            if (Array.isArray(arr) && arr.length > 0) {
+                displayData  = arr[0];
+                pathPrefix   = [];
+                var total    = arr.length;
+                treeInfo.textContent = 'Showing item [0] of ' + total + ' — paths are relative to each item';
+            } else {
+                // fallback: can't drill in
+                displayData  = jsonData;
+                pathPrefix   = [];
+                treeInfo.textContent = 'Could not drill into first item (array path not set or empty)';
+            }
+        } else {
+            displayData = jsonData;
+            pathPrefix  = [];
+            var desc = Array.isArray(jsonData)
+                ? jsonData.length + ' items at root'
+                : typeof jsonData === 'object' ? Object.keys(jsonData).length + ' top-level keys' : 'scalar';
+            treeInfo.textContent = desc;
+        }
+
+        treePanel.innerHTML = '';
+        var ul = document.createElement('ul');
+        ul.className = 'json-root';
+        if (Array.isArray(displayData) || (typeof displayData === 'object' && displayData !== null)) {
+            renderChildren(ul, displayData, pathPrefix);
+        } else {
+            ul.innerHTML = '<li>' + renderLeaf(displayData, pathPrefix) + '</li>';
+        }
+        treePanel.appendChild(ul);
+    }
+
+    // ── Tree rendering ────────────────────────────────────────────────────
+    function buildPath(parts) {
+        return parts.reduce(function (acc, p) {
+            if (typeof p === 'number') return acc + '[' + p + ']';
+            return acc === '' ? String(p) : acc + '.' + p;
+        }, '');
+    }
+
+    function renderChildren(parentUl, val, parts) {
+        var MAX_ARRAY = 30;
+        if (Array.isArray(val)) {
+            var shown = val.slice(0, MAX_ARRAY);
+            shown.forEach(function (item, i) {
+                var li  = document.createElement('li');
+                li.className = 'json-item';
+                var childParts = parts.concat(i);
+                var childPath  = buildPath(childParts);
+
+                if (item !== null && typeof item === 'object') {
+                    li.innerHTML = renderCollapsible(
+                        '<span class="json-key jnode" data-path="' + esc(childPath) + '" data-value="">[' + i + ']</span>',
+                        childPath, item, childParts, i === 0);
+                } else {
+                    li.innerHTML = '<span class="json-key jnode" data-path="' + esc(childPath) + '" data-value="">[' + i + ']</span>: ' +
+                        renderLeaf(item, childParts);
+                }
+                parentUl.appendChild(li);
+            });
+            if (val.length > MAX_ARRAY) {
+                var li = document.createElement('li');
+                li.innerHTML = '<span class="json-hint">… ' + (val.length - MAX_ARRAY) + ' more items (not shown)</span>';
+                parentUl.appendChild(li);
+            }
+        } else {
+            Object.keys(val).forEach(function (key) {
+                var li = document.createElement('li');
+                li.className = 'json-item';
+                var childParts = parts.concat([key]);
+                var childPath  = buildPath(childParts);
+                var childVal   = val[key];
+
+                if (childVal !== null && typeof childVal === 'object') {
+                    li.innerHTML = renderCollapsible(
+                        '<span class="json-key jnode" data-path="' + esc(childPath) + '" data-value="">' + esc(key) + '</span>',
+                        childPath, childVal, childParts, false);
+                } else {
+                    li.innerHTML = '<span class="json-key jnode" data-path="' + esc(childPath) + '" data-value="">' + esc(key) + '</span>: ' +
+                        renderLeaf(childVal, childParts);
+                }
+                parentUl.appendChild(li);
+            });
+        }
+    }
+
+    function renderCollapsible(keyHtml, path, val, parts, autoOpen) {
+        var isArr  = Array.isArray(val);
+        var count  = isArr ? val.length : Object.keys(val).length;
+        var hint   = isArr ? '[' + count + ']' : '{' + count + '}';
+        var openAttr = autoOpen ? ' open' : '';
+
+        // Build children lazily by inserting a placeholder and expanding on demand
+        var uid = 'jn' + (Math.random() * 1e9 | 0);
+
+        var html = '<details class="jdet"' + openAttr + '>' +
+            '<summary>' +
+                '<span class="json-toggle">▶</span>' +
+                keyHtml +
+                '<span class="json-hint">' + esc(hint) + '</span>' +
+                ' <i class="bi bi-arrow-return-left json-pick-icon" title="Pick path: ' + esc(path) + '"></i>' +
+            '</summary>' +
+            '<ul class="json-children" id="' + uid + '"></ul>' +
+            '</details>';
+
+        // Render children after DOM insertion via a tick
+        setTimeout(function () {
+            var ul = document.getElementById(uid);
+            if (ul && ul.children.length === 0) renderChildren(ul, val, parts);
+        }, 0);
+
+        return html;
+    }
+
+    function renderLeaf(val, parts) {
+        var path   = buildPath(parts);
+        var rawVal = val === null ? '' : String(val);
+        var display, cls;
+        if (val === null)              { display = 'null'; cls = 'json-null'; }
+        else if (typeof val === 'string')  { display = '"' + esc(val) + '"'; cls = 'json-str'; }
+        else if (typeof val === 'number')  { display = String(val); cls = 'json-num'; }
+        else if (typeof val === 'boolean') { display = String(val); cls = 'json-bool'; }
+        else { display = esc(JSON.stringify(val)); cls = ''; }
+
+        return '<span class="' + cls + ' jnode" data-path="' + esc(path) + '" data-value="' + esc(rawVal) + '">' +
+            display +
+            ' <i class="bi bi-arrow-return-left json-pick-icon" title="Pick: ' + esc(path) + '"></i>' +
+            '</span>';
+    }
+
+    function esc(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── Config form: AJAX submit ──────────────────────────────────────────
+    var configForm   = document.getElementById('configForm');
+    var saveToastEl  = document.getElementById('saveToast');
+    var saveToastMsg = document.getElementById('saveToastMsg');
+    var saveToast    = new bootstrap.Toast(saveToastEl, { delay: 3000 });
+
+    configForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var submitBtn = configForm.querySelector('[type=submit]');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Saving…';
+
+        fetch(configForm.action, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: new FormData(configForm)
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            if (d.success) {
+                if (d.configId) {
+                    var idInput = configForm.querySelector('input[name="Id"]');
+                    if (idInput) idInput.value = d.configId;
+                }
+                saveToastEl.className = 'toast align-items-center border-0 bg-success text-white';
+                saveToastMsg.textContent = 'Configuration saved.';
+            } else {
+                var msgs = (d.errors || ['Unknown error']).join(' ');
+                saveToastEl.className = 'toast align-items-center border-0 bg-danger text-white';
+                saveToastMsg.textContent = 'Save failed: ' + msgs;
+            }
+            saveToast.show();
+        })
+        .catch(function (err) {
+            saveToastEl.className = 'toast align-items-center border-0 bg-danger text-white';
+            saveToastMsg.textContent = 'Save failed: ' + err.message;
+            saveToast.show();
+        })
+        .finally(function () {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="bi bi-save me-1"></i>Save Configuration';
+        });
+    });
+
+    // ── Parse modal ───────────────────────────────────────────────────────
+    var parseModalEl = document.getElementById('parseModal');
+    parseModalEl.addEventListener('show.bs.modal', function () {
+        var body = document.getElementById('parseModalBody');
+        body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted small">Running parser…</p></div>';
+
+        fetch('/Agencies/JsonParsePreview?agencyId=' + agencyId + '&url=' + encodeURIComponent(currentUrl))
+            .then(function (r) { return r.json(); })
+            .then(function (d) { body.innerHTML = renderParseResult(d); })
+            .catch(function (err) { body.innerHTML = '<div class="alert alert-danger">' + esc(err.message) + '</div>'; });
+    });
+
+    function renderParseResult(d) {
+        if (d.error) return '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-1"></i>' + esc(d.error) + '</div>';
+
+        var fields = ['title','price','city','zipCode','bedrooms','livingArea','plotArea','epcScore','externalId','sourceUrl','sold','underOption'];
+        var labels = { title:'Title', price:'Price', city:'City', zipCode:'Zip Code', bedrooms:'Bedrooms',
+                       livingArea:'Living Area', plotArea:'Plot Area', epcScore:'EPC', externalId:'External ID',
+                       sourceUrl:'Source URL', sold:'Sold', underOption:'Under Option', description:'Description' };
+
+        var cards = d.properties.map(function (p, i) {
+            var img = p.imageUrl
+                ? '<img src="' + esc(p.imageUrl) + '" style="max-height:100px;max-width:100%;object-fit:cover;border-radius:6px;float:right;margin:0 0 4px 8px" onerror="this.style.display=\'none\'">'
+                : '';
+            var rows = fields.map(function (f) {
+                var v = p[f];
+                if (v == null || v === false) return '';
+                if (f === 'price' && v) v = '€ ' + Number(v).toLocaleString('nl-BE');
+                if (f === 'livingArea' || f === 'plotArea') v = v + ' m²';
+                if (f === 'sold') v = '<span class="badge bg-danger">Sold</span>';
+                if (f === 'underOption') v = '<span class="badge bg-warning text-dark">Under Option</span>';
+                return '<tr><th class="text-muted fw-normal" style="width:32%;white-space:nowrap">' + esc(labels[f] || f) + '</th><td>' + v + '</td></tr>';
+            }).join('');
+            if (p.description) rows += '<tr><th class="text-muted fw-normal">Description</th><td class="text-truncate" style="max-width:300px">' + esc(p.description) + '</td></tr>';
+
+            return '<div class="card mb-3"><div class="card-header py-2 fw-semibold">Result ' + (i+1) + '</div>' +
+                '<div class="card-body py-2" style="overflow:hidden">' + img +
+                '<table class="table table-sm table-borderless mb-0"><tbody>' + rows + '</tbody></table>' +
+                '</div></div>';
+        }).join('');
+
+        return '<p class="text-muted small mb-3">Showing first ' + d.properties.length + ' parsed propert' + (d.properties.length === 1 ? 'y' : 'ies') + '.</p>' + cards;
+    }
+})();
+</script>
+}
