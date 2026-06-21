@@ -1,22 +1,26 @@
 # Immo Crawler & Parser
 
-A production-ready, containerized real estate crawler and parser solution built with .NET 10. This system monitors real estate agency websites, extracts property data using configurable XPath strategies, and provides a modern web dashboard for searching and analysis.
+A production-ready, containerized real estate crawler and parser pipeline built with .NET 10. It monitors Belgian real estate agency websites, extracts structured property data, and serves it through a web dashboard with search and analysis tools.
 
 ## 🚀 Features
 
-- **Automated Crawling**: Periodic background workers crawl configured agency websites on a configurable schedule.
-- **On-demand Crawling**: Trigger an immediate crawl for any individual agency directly from the web UI, without waiting for the next scheduled cycle.
-- **Dynamic Parsing**: Configure XPath selectors via the web UI to support new websites without code changes.
-- **Advanced Filtering**: Filter properties by status (Available, Sold, Under Option), price, bedrooms, living area, and multi-select postal codes.
-- **Centralized Logging**: Structured logging with Serilog, persisted to a shared SQLite database, displayed in the browser's local timezone.
-- **Docker Orchestration**: Fully containerized with Docker Compose for easy deployment.
-- **CI/CD**: GitHub Actions workflow for automated Docker Hub image publishing with versioning.
+- **Automated Crawling**: Background workers crawl configured agency websites on a configurable schedule (default every 4 hours).
+- **On-demand Crawling**: Trigger an immediate crawl for any agency from the web UI; the worker picks it up within one minute.
+- **HTML & JSON API Support**: Scrape traditional HTML pages via XPath selectors, or fetch structured JSON API endpoints — both configured without code changes.
+- **Visual Config Builder**: Point-and-click XPath configuration — load any property page in a built-in iframe, click elements to capture their selectors, and map spec table rows to label fields. Includes a live parse preview to validate selectors before saving.
+- **Advanced Filtering**: Filter properties by status (Available, Sold, Under Option), price range, bedrooms, living area, EPC score, and multi-select postal codes. Filters are persisted across sessions.
+- **Change Tracking**: Field-level property history — every update to price, status, or specs is recorded and browsable.
+- **Centralized Logging**: Structured logging with Serilog, stored in the shared SQLite database and displayed in the browser's local timezone.
+- **Import/Export**: Full agency configuration (crawl rules, parser config) exportable and importable as JSON for backup or sharing.
+- **Docker Orchestration**: All three services containerised and orchestrated with Docker Compose.
+- **CI/CD**: GitHub Actions workflow for automated Docker Hub image publishing.
 
 ## 🛠 Tech Stack
 
-- **Core**: .NET 10 (Web, Worker Services, Class Libraries)
+- **Core**: .NET 10 (ASP.NET Core MVC, Worker Services, Class Libraries)
 - **Database**: SQLite with Entity Framework Core
-- **Frontend**: ASP.NET Core MVC, Bootstrap 5, Bi-icons
+- **HTML Parsing**: HtmlAgilityPack (XPath)
+- **Frontend**: Bootstrap 5, Bootstrap Icons
 - **Logging**: Serilog (SQLite & Console sinks)
 - **Infrastructure**: Docker, Docker Compose, GitHub Actions
 
@@ -27,40 +31,73 @@ A production-ready, containerized real estate crawler and parser solution built 
 - .NET 10 SDK (for local development)
 
 ### Running with Docker
-1. Clone the repository.
-2. Run the orchestration:
-   ```bash
-   docker-compose up -d
-   ```
-3. Access the web dashboard at `http://localhost:8080`.
+```bash
+docker-compose up -d
+```
+Access the dashboard at `http://localhost:8080`.
 
 ### Local Development
-1. Update `appsettings.json` or set environment variables for database paths.
-2. Run the migrations:
-   ```bash
-   dotnet ef database update --project Immo.Data --startup-project Immo.Web
-   ```
-3. Start the services:
-   ```bash
-   dotnet run --project Immo.Web
-   ```
+```bash
+# Apply migrations (run once, or after adding a new migration)
+dotnet ef database update --project Immo.Data --startup-project Immo.Web
+
+# Start the web app (also runs migrations on startup)
+dotnet run --project Immo.Web
+```
+
+## 🏗 Architecture
+
+Three hosted services share a single SQLite database (`immo.db`):
+
+| Project | Role |
+|---|---|
+| `Immo.Data` | EF Core entities, `ImmoContext`, migrations |
+| `Immo.Crawler` | Fetches raw HTML/JSON from agency sites every 4 h (or on demand) |
+| `Immo.Parser` | Extracts structured `Property` records from raw pages every 30 s |
+| `Immo.Web` | ASP.NET Core MVC dashboard |
+
+**Pipeline:**
+```
+Agency domain / API URL
+    ↓  CrawlerWorker  (SHA-256 change detection, 2–5 s rate limiting)
+RawPage  (IsParsed = false)
+    ↓  ParserWorker
+Property + PropertyHistory
+```
 
 ## ⚙️ Configuration
 
-### Agency Management
-Navigate to the **Agencies** tab to:
-- Add/Edit agency domains.
-- Configure crawler "Listing Checks" (URL patterns).
-- Define **Parser Configs**: Map XPath selectors for Title, Price, Description, Images, and Specifications (Bedrooms, EPC, Area).
-- **Crawl Now**: Click the ▶ button next to any agency to queue an immediate on-demand crawl. The crawler worker picks it up within one minute. A *Pending* badge is shown while the request is queued.
+All runtime settings are managed through the web UI (`AppSettings` entity), not `appsettings.json`:
 
-### Import/Export
-The system supports exporting and importing your entire agency configuration (rules and parsers) via JSON, making it easy to share or backup your crawling logic.
+- `RecrawlAfterDays` / `CrawlIntervalHours` — timing controls
+- `SoldKeywords` / `UnderOptionKeywords` — comma-separated strings for status detection
+- `PreferredTimezone` — for timestamp display
+- SMTP fields for email notifications
+
+Environment variables: `DB_PATH` (database file path), `ASPNETCORE_HTTP_PORTS` (default `8080`).
+
+## 🕸 Agency Setup
+
+Navigate to **Agencies** to add an agency and choose its data source type:
+
+### HTML Scraping
+1. Set the **Agency Domain** (base URL for crawling).
+2. Add **Crawling Rules** — URL patterns that identify property listing links.
+3. Optionally set a **Pagination Selector** (XPath) to follow next-page links.
+4. Open **Visual Config Builder** to configure the parser by clicking elements directly on the live page:
+   - Click any element in the rendered page to capture its XPath selector.
+   - Use **Map Labels** to parse the spec table and assign spec row labels (e.g. "Slaapkamers") to their corresponding label mapping fields.
+   - Click **Parse** to run the full parser against the loaded URL and verify extracted values.
+   - Save without leaving the page; the iframe stays loaded.
+5. Alternatively, use the **Full Editor** (Parser Configuration) to enter XPath selectors and label mappings by hand.
+
+### JSON API
+1. Set the **API Listing URL** (endpoint returning a JSON array of properties).
+2. Configure **Field Paths** using dot-notation (`price.amount`, `photos[0].url`) in the Parser Configuration.
 
 ## 📈 Observability
-The **System Logs** dashboard provides real-time access to logs across all services. Timestamps are automatically converted from UTC (as stored by Serilog) to the browser server's local timezone. You can filter by:
-- Log Level (Info, Warning, Error, Fatal)
-- Source Class (e.g., `Immo.Crawler.CrawlerWorker`)
+
+The **Logs** page shows structured Serilog output across all services. Filter by log level and source context. Timestamps are stored as UTC and converted to `PreferredTimezone` for display.
 
 ## 📝 License
 This project is licensed under the MIT License.

@@ -641,24 +641,46 @@
         if (d.error) return '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-1"></i>' + esc(d.error) + '</div>';
         if (!Array.isArray(d) || d.length === 0) return '<p class="text-muted text-center py-3">No spec rows found.</p>';
 
-        var optHtml = '<option value="">— assign to —</option>' +
-            labelFields.map(function (f) { return '<option value="' + f[0] + '">' + f[1] + '</option>'; }).join('');
+        // Snapshot current label input values so we can pre-select already-configured mappings
+        var currentValues = {};
+        labelFields.forEach(function (f) {
+            var inp = configForm.querySelector('input[name="' + f[0] + '"]');
+            if (inp && inp.value.trim()) currentValues[f[0]] = inp.value.trim().toLowerCase();
+        });
 
         var rows = d.map(function (row, i) {
-            return '<tr>' +
-                '<td class="align-middle text-muted small" style="width:40%">' + esc(row.label) + '</td>' +
-                '<td class="align-middle" style="width:35%">' + esc(row.value) + '</td>' +
-                '<td style="width:25%">' +
-                    '<div class="d-flex align-items-center gap-1">' +
-                        '<select class="form-select form-select-sm spec-assign-select" data-label="' + esc(row.label) + '" data-row="' + i + '">' + optHtml + '</select>' +
-                        '<i class="bi bi-check-circle-fill text-success spec-check-' + i + '" style="display:none;font-size:1.1rem"></i>' +
-                    '</div>' +
+            var labelLower = (row.label || '').toLowerCase();
+
+            // Find which field already maps to this spec row (contains-match, same logic as the parser)
+            var preSelected = '';
+            labelFields.forEach(function (f) {
+                if (!preSelected && currentValues[f[0]] && labelLower.includes(currentValues[f[0]])) {
+                    preSelected = f[0];
+                }
+            });
+
+            var options = '<option value="">— assign to —</option>' +
+                labelFields.map(function (f) {
+                    return '<option value="' + f[0] + '"' + (f[0] === preSelected ? ' selected' : '') + '>' + f[1] + '</option>';
+                }).join('');
+
+            var mappedBadge = preSelected
+                ? ' <span class="badge bg-success spec-badge-' + i + '" style="font-size:0.6rem">mapped</span>'
+                : ' <span class="badge bg-secondary spec-badge-' + i + '" style="display:none;font-size:0.6rem">mapped</span>';
+
+            return '<tr class="' + (preSelected ? 'table-success' : '') + '">' +
+                '<td class="align-middle small fw-medium">' + esc(row.label) + mappedBadge + '</td>' +
+                '<td class="align-middle text-muted small">' + esc(row.value) + '</td>' +
+                '<td class="align-middle">' +
+                    '<select class="form-select form-select-sm spec-assign-select" data-label="' + esc(row.label) + '" data-row="' + i + '">' +
+                        options +
+                    '</select>' +
                 '</td>' +
             '</tr>';
         }).join('');
 
         return '<table class="table table-sm table-hover mb-0">' +
-            '<thead class="table-light"><tr><th>Label</th><th>Value</th><th>Assign to</th></tr></thead>' +
+            '<thead class="table-light"><tr><th>Spec label</th><th>Sample value</th><th>Assign to field</th></tr></thead>' +
             '<tbody>' + rows + '</tbody>' +
             '</table>';
     }
@@ -675,8 +697,9 @@
                     setTimeout(function () { targetInput.classList.remove('active-pick'); }, 1200);
                 }
                 var rowIdx = sel.dataset.row;
-                var check = specMapBody.querySelector('.spec-check-' + rowIdx);
-                if (check) check.style.display = '';
+                var badge = specMapBody.querySelector('.spec-badge-' + rowIdx);
+                if (badge) { badge.style.display = ''; badge.className = badge.className.replace('bg-secondary', 'bg-success'); }
+                sel.closest('tr').className = 'table-success';
                 sel.value = '';   // reset so it can be reassigned
             });
         });
