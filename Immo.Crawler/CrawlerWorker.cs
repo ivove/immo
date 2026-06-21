@@ -21,7 +21,6 @@ public class CrawlerWorker : BackgroundService
     {
         _logger.LogInformation("Crawler Worker starting...");
 
-        // Track when the last full cycle ran so we can schedule the next one
         var nextFullCycleAt = DateTime.UtcNow;
 
         while (!stoppingToken.IsCancellationRequested)
@@ -29,31 +28,7 @@ public class CrawlerWorker : BackgroundService
             try
             {
                 // --- On-demand crawl requests ---
-                using (var scope = _scopeFactory.CreateScope())
-                {
-                    var context = scope.ServiceProvider.GetRequiredService<ImmoContext>();
-                    var crawler = scope.ServiceProvider.GetRequiredService<CrawlerService>();
-
-                    var pendingAgencies = await context.Agencies
-                        .Where(a => a.CrawlRequestedAt != null && !a.IsSuspended)
-                        .ToListAsync(stoppingToken);
-
-                    foreach (var agency in pendingAgencies)
-                    {
-                        if (stoppingToken.IsCancellationRequested) break;
-
-                        _logger.LogInformation("On-demand crawl requested for agency: {Domain}", agency.AgencyDomain);
-
-                        // Clear the request flag immediately so it isn't picked up again
-                        agency.CrawlRequestedAt = null;
-                        await context.SaveChangesAsync(stoppingToken);
-
-                        if (agency.DataSourceType == "json_api" && !string.IsNullOrEmpty(agency.ApiListingUrl))
-                            await crawler.CrawlJsonApiAsync(agency.ApiListingUrl, agency.Id);
-                        else
-                            await crawler.CrawlListingPageAsync(agency.AgencyDomain, agencyId: agency.Id);
-                    }
-                }
+                await ProcessOnDemandRequestsAsync(stoppingToken);
 
                 // --- Regular scheduled full cycle ---
                 if (DateTime.UtcNow >= nextFullCycleAt)
@@ -71,6 +46,10 @@ public class CrawlerWorker : BackgroundService
                         foreach (var agency in agencies)
                         {
                             if (stoppingToken.IsCancellationRequested) break;
+
+                            // Service on-demand requests between agencies so they aren't blocked
+                            // by a long-running scheduled cycle.
+                            await ProcessOnDemandRequestsAsync(stoppingToken);
 
                             _logger.LogInformation("Processing agency: {Domain}", agency.AgencyDomain);
 
@@ -107,5 +86,31 @@ public class CrawlerWorker : BackgroundService
         }
 
         _logger.LogInformation("Crawler Worker stopping...");
+    }
+
+    private async Task ProcessOnDemandRequestsAsync(CancellationToken stoppingToken)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ImmoContext>();
+        var crawler = scope.ServiceProvider.GetRequiredService<CrawlerService>();
+
+        var pendingAgencies = await context.Agencies
+            .Where(a => a.CrawlRequestedAt != null && !a.IsSuspended)
+            .ToListAsync(stoppingToken);
+
+        foreach (var agency in pendingAgencies)
+        {
+            if (stoppingToken.IsCancellationRequested) break;
+
+            _logger.LogInformation("On-demand crawl requested for agency: {Domain}", agency.AgencyDomain);
+
+            agency.CrawlRequestedAt = null;
+            await context.SaveChangesAsync(stoppingToken);
+
+            if (agency.DataSourceType == "json_api" && !string.IsNullOrEmpty(agency.ApiListingUrl))
+                await crawler.CrawlJsonApiAsync(agency.ApiListingUrl, agency.Id);
+            else
+                await crawler.CrawlListingPageAsync(agency.AgencyDomain, agencyId: agency.Id);
+        }
     }
 }
