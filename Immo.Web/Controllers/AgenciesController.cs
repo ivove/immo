@@ -757,6 +757,107 @@ public class AgenciesController : Controller
         })();
         """;
 
+    // GET: Agencies/VisualJsonConfig/5
+    public async Task<IActionResult> VisualJsonConfig(int agencyId)
+    {
+        var agency = await _context.Agencies
+            .Include(a => a.ParserConfig)
+            .FirstOrDefaultAsync(a => a.Id == agencyId);
+        if (agency == null) return NotFound();
+
+        if (agency.DataSourceType != "json_api")
+        {
+            TempData["ErrorMessage"] = "JSON Visual Config Builder is only available for JSON API agencies.";
+            return RedirectToAction(nameof(Edit), new { id = agencyId });
+        }
+
+        var config = agency.ParserConfig ?? new ParserConfig { AgencyId = agencyId };
+        ViewBag.AgencyDomain  = agency.AgencyDomain;
+        ViewBag.ApiListingUrl = agency.ApiListingUrl ?? "";
+        return View(config);
+    }
+
+    // GET: Agencies/FetchJson
+    public async Task<IActionResult> FetchJson(int agencyId, string url)
+    {
+        var agency = await _context.Agencies.FindAsync(agencyId);
+        if (agency == null) return NotFound();
+
+        if (string.IsNullOrWhiteSpace(url)
+            || !Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            || (uri.Scheme != "http" && uri.Scheme != "https"))
+            return BadRequest("Invalid URL");
+
+        try
+        {
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            client.Timeout = TimeSpan.FromSeconds(30);
+            var content = await (await client.GetAsync(url)).Content.ReadAsStringAsync();
+            return Content(content, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "FetchJson proxy failed for URL {Url}", url);
+            return StatusCode(500, System.Text.Json.JsonSerializer.Serialize(new { error = ex.Message }));
+        }
+    }
+
+    // GET: Agencies/JsonParsePreview
+    public async Task<IActionResult> JsonParsePreview(int agencyId, string url)
+    {
+        var agency = await _context.Agencies
+            .Include(a => a.ParserConfig)
+            .FirstOrDefaultAsync(a => a.Id == agencyId);
+        if (agency == null) return NotFound();
+
+        if (string.IsNullOrWhiteSpace(url))
+            return BadRequest("URL required");
+
+        try
+        {
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            client.Timeout = TimeSpan.FromSeconds(30);
+            var content = await (await client.GetAsync(url)).Content.ReadAsStringAsync();
+
+            var rawPage = new RawPage { Url = "json-api://" + url, HtmlContent = content, AgencyId = agencyId, CrawledAt = DateTime.UtcNow };
+            var parser = new Immo.Parser.Strategies.JsonApiParserStrategy(_context,
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<Immo.Parser.Strategies.JsonApiParserStrategy>.Instance);
+            var props = parser.ParseMany(rawPage).Take(5).ToList();
+
+            if (props.Count == 0)
+                return Json(new { error = "No properties parsed. Check your configuration and make sure it has been saved." });
+
+            return Json(new {
+                count = props.Count,
+                properties = props.Select(p => new
+                {
+                    title       = p.Title,
+                    price       = p.Price,
+                    city        = p.City,
+                    zipCode     = p.ZipCode,
+                    bedrooms    = p.Bedrooms,
+                    livingArea  = p.LivingArea,
+                    plotArea    = p.PlotArea,
+                    epcScore    = p.EpcScore,
+                    description = p.Description != null && p.Description.Length > 200
+                                    ? p.Description[..200] + "…" : p.Description,
+                    imageUrl    = p.ImageUrl,
+                    externalId  = p.ExternalId,
+                    sourceUrl   = p.SourceUrl,
+                    sold        = p.Sold,
+                    underOption = p.UnderOption
+                })
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "JsonParsePreview failed for agency {AgencyId}, URL {Url}", agencyId, url);
+            return Json(new { error = ex.Message });
+        }
+    }
+
     // GET: Agencies/Export
     public async Task<IActionResult> Export()
     {
