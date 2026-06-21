@@ -1,0 +1,755 @@
+@model Immo.Data.Entities.ParserConfig
+
+@{
+    ViewData["Title"] = "Visual Config Builder";
+}
+
+<style>
+    .visual-builder {
+        height: calc(100vh - 130px);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .builder-topbar {
+        flex-shrink: 0;
+        background: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+        padding: 0.6rem 1rem;
+    }
+
+    .builder-main {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+    }
+
+    .builder-sidebar {
+        width: 330px;
+        min-width: 330px;
+        overflow-y: auto;
+        border-right: 1px solid #dee2e6;
+        padding: 0.75rem;
+        background: #fff;
+    }
+
+    .builder-preview {
+        flex: 1;
+        position: relative;
+        background: #e9ecef;
+    }
+
+    .builder-preview iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
+        display: none;
+    }
+
+    .builder-overlay {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        color: #6c757d;
+        pointer-events: none;
+    }
+
+    .xpath-input.active-pick {
+        border-color: #4361ee !important;
+        box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.25) !important;
+    }
+
+    .pick-btn.active {
+        background-color: #4361ee;
+        border-color: #4361ee;
+        color: #fff;
+    }
+
+    .pick-hint {
+        font-size: 0.7rem;
+        color: #6c757d;
+        margin-top: 0.15rem;
+        font-style: italic;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+
+    .section-title {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #868e96;
+        margin: 0.85rem 0 0.4rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid #f0f0f0;
+    }
+
+    .section-title:first-child {
+        border-top: none;
+        margin-top: 0;
+        padding-top: 0;
+    }
+
+    .field-row {
+        margin-bottom: 0.5rem;
+    }
+
+    .field-row > label {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.2rem;
+        display: block;
+    }
+</style>
+
+<div class="visual-builder">
+
+    <!-- Top bar -->
+    <div class="builder-topbar d-flex align-items-center gap-2 flex-wrap">
+        <a asp-action="Edit" asp-route-id="@Model.AgencyId" class="btn btn-sm btn-outline-secondary" title="Back to agency">
+            <i class="bi bi-arrow-left"></i>
+        </a>
+        <span class="fw-semibold text-muted small text-truncate" style="max-width:160px" title="@ViewBag.AgencyDomain">@ViewBag.AgencyDomain</span>
+        <input type="text" id="urlInput" class="form-control form-control-sm"
+               placeholder="Enter a property detail page URL..."
+               value="@ViewBag.AgencyDomain"
+               style="max-width:480px" autocomplete="off" />
+        <button id="loadBtn" class="btn btn-sm btn-primary" style="white-space:nowrap">
+            <i class="bi bi-play-fill me-1"></i>Load
+        </button>
+        <button id="parseBtn" class="btn btn-sm btn-outline-success" style="white-space:nowrap" disabled
+                data-bs-toggle="modal" data-bs-target="#parseModal">
+            <i class="bi bi-search me-1"></i>Parse
+        </button>
+        <span class="vr d-none d-md-block"></span>
+        <span id="statusMsg" class="text-muted small d-none d-md-inline">
+            Focus an XPath field on the left, then click an element in the page
+        </span>
+    </div>
+
+    <!-- Main content -->
+    <div class="builder-main">
+
+        <!-- Left sidebar: config form -->
+        <div class="builder-sidebar">
+            <form asp-action="EditParserConfig" method="post" id="configForm">
+                <input type="hidden" asp-for="Id" />
+                <input type="hidden" asp-for="AgencyId" />
+
+                <div class="section-title">Main XPath Selectors</div>
+
+                <div class="field-row">
+                    <label>Title</label>
+                    <div class="input-group input-group-sm">
+                        <input name="TitleSelector" id="f_TitleSelector" value="@Model.TitleSelector"
+                               class="form-control xpath-input" placeholder="//h1" data-label="Title" autocomplete="off" />
+                        <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_TitleSelector" title="Click to pick from page">
+                            <i class="bi bi-cursor"></i>
+                        </button>
+                    </div>
+                    <div class="pick-hint" id="hint_TitleSelector"></div>
+                </div>
+
+                <div class="field-row">
+                    <label>Price</label>
+                    <div class="input-group input-group-sm">
+                        <input name="PriceSelector" id="f_PriceSelector" value="@Model.PriceSelector"
+                               class="form-control xpath-input" placeholder="//span[contains(@@class,'price')]" data-label="Price" autocomplete="off" />
+                        <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_PriceSelector" title="Click to pick from page">
+                            <i class="bi bi-cursor"></i>
+                        </button>
+                    </div>
+                    <div class="pick-hint" id="hint_PriceSelector"></div>
+                </div>
+
+                <div class="field-row">
+                    <label>Bedrooms</label>
+                    <div class="input-group input-group-sm">
+                        <input name="BedroomSelector" id="f_BedroomSelector" value="@Model.BedroomSelector"
+                               class="form-control xpath-input" placeholder="" data-label="Bedrooms" autocomplete="off" />
+                        <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_BedroomSelector" title="Click to pick from page">
+                            <i class="bi bi-cursor"></i>
+                        </button>
+                    </div>
+                    <div class="pick-hint" id="hint_BedroomSelector"></div>
+                </div>
+
+                <div class="field-row">
+                    <label>Description</label>
+                    <div class="input-group input-group-sm">
+                        <input name="DescriptionSelector" id="f_DescriptionSelector" value="@Model.DescriptionSelector"
+                               class="form-control xpath-input" placeholder="" data-label="Description" autocomplete="off" />
+                        <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_DescriptionSelector" title="Click to pick from page">
+                            <i class="bi bi-cursor"></i>
+                        </button>
+                    </div>
+                    <div class="pick-hint" id="hint_DescriptionSelector"></div>
+                </div>
+
+                <div class="field-row">
+                    <label>Image <span class="text-muted fw-normal">(XPath to &lt;img&gt; — src attr is used)</span></label>
+                    <div class="input-group input-group-sm">
+                        <input name="ImageSelector" id="f_ImageSelector" value="@Model.ImageSelector"
+                               class="form-control xpath-input" placeholder="//img[@@class='hero']" data-label="Image" autocomplete="off" />
+                        <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_ImageSelector" title="Click to pick from page">
+                            <i class="bi bi-cursor"></i>
+                        </button>
+                    </div>
+                    <div class="pick-hint" id="hint_ImageSelector"></div>
+                </div>
+
+                <div class="field-row">
+                    <label>Address</label>
+                    <div class="input-group input-group-sm">
+                        <input name="AddressSelector" id="f_AddressSelector" value="@Model.AddressSelector"
+                               class="form-control xpath-input" placeholder="" data-label="Address" autocomplete="off" />
+                        <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_AddressSelector" title="Click to pick from page">
+                            <i class="bi bi-cursor"></i>
+                        </button>
+                    </div>
+                    <div class="pick-hint" id="hint_AddressSelector"></div>
+                </div>
+
+                <div class="field-row">
+                    <label>External ID Pattern <span class="text-muted fw-normal">(regex on URL)</span></label>
+                    <input name="ExternalIdPattern" value="@Model.ExternalIdPattern"
+                           class="form-control form-control-sm" placeholder="/(\d+)$" autocomplete="off" />
+                </div>
+
+                <div class="section-title d-flex justify-content-between align-items-center">
+                    <span>Spec Table (Key-Value Pairs)</span>
+                    <button type="button" id="mapLabelsBtn" class="btn btn-outline-secondary btn-sm py-0" disabled
+                            data-bs-toggle="modal" data-bs-target="#specMapModal"
+                            title="Parse the spec table and map labels to fields">
+                        <i class="bi bi-table me-1"></i>Map Labels
+                    </button>
+                </div>
+
+                <div class="field-row">
+                    <label>Row Container <span class="text-muted fw-normal">(e.g. //tr or //dl/div)</span></label>
+                    <div class="input-group input-group-sm">
+                        <input name="SpecContainerSelector" id="f_SpecContainerSelector" value="@Model.SpecContainerSelector"
+                               class="form-control xpath-input" placeholder="//tr" data-label="Spec Row Container" autocomplete="off" />
+                        <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_SpecContainerSelector" title="Click to pick from page">
+                            <i class="bi bi-cursor"></i>
+                        </button>
+                    </div>
+                    <div class="pick-hint" id="hint_SpecContainerSelector"></div>
+                </div>
+
+                <div class="row g-1 mb-1">
+                    <div class="col-6 field-row">
+                        <label>Label <span class="text-muted fw-normal">(.//td[1])</span></label>
+                        <div class="input-group input-group-sm">
+                            <input name="SpecLabelSelector" id="f_SpecLabelSelector" value="@Model.SpecLabelSelector"
+                                   class="form-control xpath-input" placeholder=".//dt" data-label="Spec Label" autocomplete="off" />
+                            <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_SpecLabelSelector" title="Click to pick from page">
+                                <i class="bi bi-cursor"></i>
+                            </button>
+                        </div>
+                        <div class="pick-hint" id="hint_SpecLabelSelector"></div>
+                    </div>
+                    <div class="col-6 field-row">
+                        <label>Value <span class="text-muted fw-normal">(.//td[2])</span></label>
+                        <div class="input-group input-group-sm">
+                            <input name="SpecValueSelector" id="f_SpecValueSelector" value="@Model.SpecValueSelector"
+                                   class="form-control xpath-input" placeholder=".//dd" data-label="Spec Value" autocomplete="off" />
+                            <button type="button" class="btn btn-outline-secondary pick-btn" data-field="f_SpecValueSelector" title="Click to pick from page">
+                                <i class="bi bi-cursor"></i>
+                            </button>
+                        </div>
+                        <div class="pick-hint" id="hint_SpecValueSelector"></div>
+                    </div>
+                </div>
+
+                <div class="section-title">Label Mappings <span class="text-muted fw-normal text-lowercase">(text contains match)</span></div>
+
+                <div class="row g-1 mb-1">
+                    <div class="col-8 field-row">
+                        <label>Bedrooms Label</label>
+                        <input name="BedroomLabel" value="@Model.BedroomLabel" class="form-control form-control-sm" placeholder="Slaapkamers" />
+                    </div>
+                    <div class="col-4 d-flex align-items-end pb-2">
+                        <div class="form-check ms-1">
+                            <input name="CountBedrooms" id="CountBedrooms" type="checkbox" class="form-check-input" value="true" @(Model.CountBedrooms ? "checked" : "") />
+                            <input name="CountBedrooms" type="hidden" value="false" />
+                            <label for="CountBedrooms" class="form-check-label" style="font-size:0.78rem">Count</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-1 mb-1">
+                    <div class="col-6 field-row">
+                        <label>Living Area Label</label>
+                        <input name="LivingAreaLabel" value="@Model.LivingAreaLabel" class="form-control form-control-sm" placeholder="Bewoonbare opp" />
+                    </div>
+                    <div class="col-6 field-row">
+                        <label>Plot Area Label</label>
+                        <input name="PlotAreaLabel" value="@Model.PlotAreaLabel" class="form-control form-control-sm" placeholder="Grondopp" />
+                    </div>
+                </div>
+
+                <div class="row g-1 mb-1">
+                    <div class="col-6 field-row">
+                        <label>EPC Label</label>
+                        <input name="EpcLabel" value="@Model.EpcLabel" class="form-control form-control-sm" placeholder="EPC" />
+                    </div>
+                    <div class="col-6 field-row">
+                        <label>Reference Label</label>
+                        <input name="ReferenceLabel" value="@Model.ReferenceLabel" class="form-control form-control-sm" placeholder="Referentie" />
+                    </div>
+                </div>
+
+                <div class="field-row">
+                    <label>Combined Address Label</label>
+                    <input name="AddressLabel" value="@Model.AddressLabel" class="form-control form-control-sm" placeholder="Adres" />
+                </div>
+
+                <div class="row g-1 mb-1">
+                    <div class="col-6 field-row">
+                        <label>Zip Code Label</label>
+                        <input name="ZipCodeLabel" value="@Model.ZipCodeLabel" class="form-control form-control-sm" placeholder="Postcode" />
+                    </div>
+                    <div class="col-6 field-row">
+                        <label>City Label</label>
+                        <input name="CityLabel" value="@Model.CityLabel" class="form-control form-control-sm" placeholder="Stad" />
+                    </div>
+                </div>
+
+                <div class="field-row">
+                    <label>Price Label</label>
+                    <input name="PriceLabel" value="@Model.PriceLabel" class="form-control form-control-sm" placeholder="Prijs" />
+                </div>
+
+                <div class="border-top pt-3 mt-2 d-grid gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="bi bi-save me-1"></i>Save Configuration
+                    </button>
+                    <a asp-action="EditParserConfig" asp-route-agencyId="@Model.AgencyId" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-pencil me-1"></i>Open Full Editor
+                    </a>
+                </div>
+            </form>
+        </div>
+
+        <!-- Right: proxied page preview -->
+        <div class="builder-preview">
+            <div class="builder-overlay" id="overlayPlaceholder">
+                <i class="bi bi-cursor" style="font-size:2.5rem;opacity:0.25"></i>
+                <p class="mt-3 mb-1 fw-semibold">Enter a property page URL and click Load</p>
+                <p class="small text-center px-3">The page will render here — click any element to assign its XPath to the focused config field</p>
+            </div>
+            <div class="builder-overlay" id="overlayLoading" style="display:none">
+                <div class="spinner-border text-primary" role="status" style="width:2rem;height:2rem"></div>
+                <p class="mt-3">Loading page…</p>
+            </div>
+            <iframe id="previewFrame" title="Property Page Preview" data-agency-id="@Model.AgencyId"></iframe>
+        </div>
+    </div>
+</div>
+
+<!-- Save toast -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:1100">
+    <div id="saveToast" class="toast align-items-center border-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body" id="saveToastMsg"></div>
+            <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    </div>
+</div>
+
+<!-- Spec table mapping modal -->
+<div class="modal fade" id="specMapModal" tabindex="-1" aria-labelledby="specMapModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content rounded-4">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h5 class="modal-title fw-bold" id="specMapModalLabel">
+                    <i class="bi bi-table me-2 text-secondary"></i>Spec Table — Map Labels
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="specMapModalBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2 text-muted small">Parsing spec table…</p>
+                </div>
+            </div>
+            <div class="modal-footer border-top-0">
+                <small class="text-muted me-auto">Select a field to assign a spec label to its label mapping input.</small>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Parse result modal -->
+<div class="modal fade" id="parseModal" tabindex="-1" aria-labelledby="parseModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content rounded-4">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h5 class="modal-title fw-bold" id="parseModalLabel">
+                    <i class="bi bi-search me-2 text-success"></i>Parse Result
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="parseModalBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2 text-muted">Parsing…</p>
+                </div>
+            </div>
+            <div class="modal-footer border-top-0">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(function () {
+    var frame   = document.getElementById('previewFrame');
+    var urlInput = document.getElementById('urlInput');
+    var loadBtn  = document.getElementById('loadBtn');
+    var parseBtn = document.getElementById('parseBtn');
+    var statusMsg = document.getElementById('statusMsg');
+    var overlayPlaceholder = document.getElementById('overlayPlaceholder');
+    var overlayLoading     = document.getElementById('overlayLoading');
+    var agencyId = frame.dataset.agencyId;
+
+    var activeInput = null;   // currently focused xpath input
+    var frameReady  = false;
+    var currentUrl  = null;   // URL currently loaded in the iframe
+
+    // ── Activate an XPath input for picking ──────────────────────────────────
+    function activate(input) {
+        if (activeInput) {
+            activeInput.classList.remove('active-pick');
+            var oldBtn = document.querySelector('.pick-btn[data-field="' + activeInput.id + '"]');
+            if (oldBtn) { oldBtn.classList.remove('active'); oldBtn.querySelector('i').className = 'bi bi-cursor'; }
+        }
+        activeInput = input;
+        if (!input) {
+            statusMsg.textContent = 'Focus an XPath field on the left, then click an element in the page';
+            highlightInFrame(null);
+            return;
+        }
+        input.classList.add('active-pick');
+        var btn = document.querySelector('.pick-btn[data-field="' + input.id + '"]');
+        if (btn) { btn.classList.add('active'); btn.querySelector('i').className = 'bi bi-cursor-fill'; }
+        statusMsg.textContent = 'Picking: ' + input.dataset.label + ' — click an element in the page';
+        if (input.value) highlightInFrame(input.value);
+        else highlightInFrame(null);
+    }
+
+    // ── XPath inputs: focus activates picking ────────────────────────────────
+    document.querySelectorAll('.xpath-input').forEach(function (inp) {
+        inp.addEventListener('focus', function () { activate(inp); });
+        inp.addEventListener('blur',  function () {
+            // Small delay so pick-btn click registers before blur fires
+            setTimeout(function () {
+                if (document.activeElement && document.activeElement.classList.contains('pick-btn')) return;
+                if (document.activeElement === inp) return;
+                // Only deactivate if nothing else took over
+                if (activeInput === inp) activate(null);
+            }, 150);
+        });
+        inp.addEventListener('input', function () {
+            if (activeInput === inp && inp.value) highlightInFrame(inp.value);
+        });
+    });
+
+    // ── Pick buttons ─────────────────────────────────────────────────────────
+    document.querySelectorAll('.pick-btn').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            var target = document.getElementById(btn.dataset.field);
+            if (!target) return;
+            if (activeInput === target) {
+                activate(null);   // toggle off
+            } else {
+                activate(target);
+                target.focus();
+            }
+        });
+    });
+
+    // ── Messages from iframe ──────────────────────────────────────────────────
+    window.addEventListener('message', function (e) {
+        if (!e.data || e.data.type !== 'immo:pick') return;
+        if (!activeInput) return;
+
+        activeInput.value = e.data.xpath;
+
+        // Show preview text under the input
+        var hintEl = document.getElementById('hint_' + activeInput.name);
+        if (hintEl && e.data.text) hintEl.textContent = '"' + e.data.text + '"';
+
+        // Highlight in frame
+        highlightInFrame(e.data.xpath);
+
+        // Move focus to the next xpath input after a tick
+        var all = Array.from(document.querySelectorAll('.xpath-input'));
+        var idx = all.indexOf(activeInput);
+        activate(null);
+        if (idx >= 0 && idx < all.length - 1) {
+            all[idx + 1].focus();
+        }
+    });
+
+    // ── Send highlight request to iframe ─────────────────────────────────────
+    function highlightInFrame(xpath) {
+        if (!frameReady) return;
+        try { frame.contentWindow.postMessage({ type: 'immo:highlight', xpath: xpath || null }, '*'); } catch (_) {}
+    }
+
+    frame.addEventListener('load', function () {
+        frameReady = !!(frame.src && frame.src !== 'about:blank');
+        if (frameReady) {
+            overlayLoading.style.display = 'none';
+            frame.style.display = 'block';
+            parseBtn.disabled = false;
+            document.getElementById('mapLabelsBtn').disabled = false;
+            if (activeInput && activeInput.value) {
+                setTimeout(function () { highlightInFrame(activeInput.value); }, 300);
+            }
+        }
+    });
+
+    // ── Load button ───────────────────────────────────────────────────────────
+    loadBtn.addEventListener('click', function () {
+        var url = urlInput.value.trim();
+        if (!url) return;
+        currentUrl = url;
+        frameReady = false;
+        parseBtn.disabled = true;
+        document.getElementById('mapLabelsBtn').disabled = true;
+        frame.style.display = 'none';
+        overlayPlaceholder.style.display = 'none';
+        overlayLoading.style.display = '';
+        loadBtn.disabled = true;
+        loadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Loading…';
+        frame.src = '/Agencies/ProxyPage?agencyId=' + agencyId + '&url=' + encodeURIComponent(url);
+    });
+
+    // Also allow pressing Enter in URL input
+    urlInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); loadBtn.click(); }
+    });
+
+    frame.addEventListener('load', function () {
+        loadBtn.disabled = false;
+        loadBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Reload';
+    });
+
+    // ── Config form: AJAX submit ──────────────────────────────────────────────
+    var configForm = document.getElementById('configForm');
+    var saveToastEl = document.getElementById('saveToast');
+    var saveToastMsg = document.getElementById('saveToastMsg');
+    var saveToast = new bootstrap.Toast(saveToastEl, { delay: 3000 });
+
+    configForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var submitBtn = configForm.querySelector('[type=submit]');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Saving…';
+
+        var formData = new FormData(configForm);
+
+        fetch(configForm.action, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: formData
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            if (d.success) {
+                // Update hidden Id in case this was a new config (Id was 0)
+                if (d.configId) {
+                    var idInput = configForm.querySelector('input[name="Id"]');
+                    if (idInput) idInput.value = d.configId;
+                }
+                saveToastEl.classList.remove('bg-danger', 'text-white');
+                saveToastEl.classList.add('bg-success', 'text-white');
+                saveToastMsg.textContent = 'Configuration saved.';
+            } else {
+                var msgs = (d.errors || ['Unknown error']).join(' ');
+                saveToastEl.classList.remove('bg-success', 'text-white');
+                saveToastEl.classList.add('bg-danger', 'text-white');
+                saveToastMsg.textContent = 'Save failed: ' + msgs;
+            }
+            saveToast.show();
+        })
+        .catch(function (err) {
+            saveToastEl.classList.add('bg-danger', 'text-white');
+            saveToastMsg.textContent = 'Save failed: ' + err.message;
+            saveToast.show();
+        })
+        .finally(function () {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="bi bi-save me-1"></i>Save Configuration';
+        });
+    });
+
+    // ── Spec map modal ────────────────────────────────────────────────────────
+    var specMapModalEl = document.getElementById('specMapModal');
+    var specMapBody    = document.getElementById('specMapModalBody');
+
+    // label fields: [inputName, displayName]
+    var labelFields = [
+        ['BedroomLabel',   'Bedrooms'],
+        ['LivingAreaLabel','Living Area'],
+        ['PlotAreaLabel',  'Plot Area'],
+        ['EpcLabel',       'EPC'],
+        ['ReferenceLabel', 'Reference'],
+        ['AddressLabel',   'Address'],
+        ['ZipCodeLabel',   'Zip Code'],
+        ['CityLabel',      'City'],
+        ['PriceLabel',     'Price']
+    ];
+
+    specMapModalEl.addEventListener('show.bs.modal', function () {
+        specMapBody.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted small">Parsing spec table…</p></div>';
+
+        var containerSel = (document.querySelector('input[name="SpecContainerSelector"]') || {}).value || '';
+        var labelSel     = (document.querySelector('input[name="SpecLabelSelector"]') || {}).value || '';
+        var valueSel     = (document.querySelector('input[name="SpecValueSelector"]') || {}).value || '';
+
+        var params = new URLSearchParams({
+            agencyId:          agencyId,
+            url:               currentUrl,
+            containerSelector: containerSel,
+            labelSelector:     labelSel,
+            valueSelector:     valueSel
+        });
+
+        fetch('/Agencies/ParseSpecTable?' + params)
+            .then(function (r) { return r.json(); })
+            .then(function (d) { specMapBody.innerHTML = renderSpecTable(d); bindSpecAssign(); })
+            .catch(function (err) { specMapBody.innerHTML = '<div class="alert alert-danger">' + esc(err.message) + '</div>'; });
+    });
+
+    function renderSpecTable(d) {
+        if (d.error) return '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-1"></i>' + esc(d.error) + '</div>';
+        if (!Array.isArray(d) || d.length === 0) return '<p class="text-muted text-center py-3">No spec rows found.</p>';
+
+        // Snapshot current label input values so we can pre-select already-configured mappings
+        var currentValues = {};
+        labelFields.forEach(function (f) {
+            var inp = configForm.querySelector('input[name="' + f[0] + '"]');
+            if (inp && inp.value.trim()) currentValues[f[0]] = inp.value.trim().toLowerCase();
+        });
+
+        var rows = d.map(function (row, i) {
+            var labelLower = (row.label || '').toLowerCase();
+
+            // Find which field already maps to this spec row (contains-match, same logic as the parser)
+            var preSelected = '';
+            labelFields.forEach(function (f) {
+                if (!preSelected && currentValues[f[0]] && labelLower.includes(currentValues[f[0]])) {
+                    preSelected = f[0];
+                }
+            });
+
+            var options = '<option value="">— assign to —</option>' +
+                labelFields.map(function (f) {
+                    return '<option value="' + f[0] + '"' + (f[0] === preSelected ? ' selected' : '') + '>' + f[1] + '</option>';
+                }).join('');
+
+            var mappedBadge = preSelected
+                ? ' <span class="badge bg-success spec-badge-' + i + '" style="font-size:0.6rem">mapped</span>'
+                : ' <span class="badge bg-secondary spec-badge-' + i + '" style="display:none;font-size:0.6rem">mapped</span>';
+
+            return '<tr class="' + (preSelected ? 'table-success' : '') + '">' +
+                '<td class="align-middle small fw-medium">' + esc(row.label) + mappedBadge + '</td>' +
+                '<td class="align-middle text-muted small">' + esc(row.value) + '</td>' +
+                '<td class="align-middle">' +
+                    '<select class="form-select form-select-sm spec-assign-select" data-label="' + esc(row.label) + '" data-row="' + i + '">' +
+                        options +
+                    '</select>' +
+                '</td>' +
+            '</tr>';
+        }).join('');
+
+        return '<table class="table table-sm table-hover mb-0">' +
+            '<thead class="table-light"><tr><th>Spec label</th><th>Sample value</th><th>Assign to field</th></tr></thead>' +
+            '<tbody>' + rows + '</tbody>' +
+            '</table>';
+    }
+
+    function bindSpecAssign() {
+        specMapBody.querySelectorAll('.spec-assign-select').forEach(function (sel) {
+            sel.addEventListener('change', function () {
+                if (!sel.value) return;
+                var targetInput = configForm.querySelector('input[name="' + sel.value + '"]');
+                if (targetInput) {
+                    targetInput.value = sel.dataset.label;
+                    // Flash the target input in the sidebar
+                    targetInput.classList.add('active-pick');
+                    setTimeout(function () { targetInput.classList.remove('active-pick'); }, 1200);
+                }
+                var rowIdx = sel.dataset.row;
+                var badge = specMapBody.querySelector('.spec-badge-' + rowIdx);
+                if (badge) { badge.style.display = ''; badge.className = badge.className.replace('bg-secondary', 'bg-success'); }
+                sel.closest('tr').className = 'table-success';
+                sel.value = '';   // reset so it can be reassigned
+            });
+        });
+    }
+
+    // ── Parse modal ───────────────────────────────────────────────────────────
+    var parseModalEl = document.getElementById('parseModal');
+    parseModalEl.addEventListener('show.bs.modal', function () {
+        var body = document.getElementById('parseModalBody');
+        body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted small">Fetching and parsing…</p></div>';
+
+        fetch('/Agencies/ParsePreview?agencyId=' + agencyId + '&url=' + encodeURIComponent(currentUrl))
+            .then(function (r) { return r.json(); })
+            .then(function (d) { body.innerHTML = renderParseResult(d); })
+            .catch(function (err) { body.innerHTML = '<div class="alert alert-danger">' + err.message + '</div>'; });
+    });
+
+    function renderParseResult(d) {
+        if (d.error) return '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-1"></i>' + esc(d.error) + '</div>';
+
+        var rows = [
+            ['Title',       d.title],
+            ['Price',       d.price != null ? '€ ' + Number(d.price).toLocaleString('nl-BE') : null],
+            ['City',        d.city],
+            ['Zip Code',    d.zipCode],
+            ['Bedrooms',    d.bedrooms],
+            ['Living Area', d.livingArea != null ? d.livingArea + ' m²' : null],
+            ['Plot Area',   d.plotArea  != null ? d.plotArea  + ' m²' : null],
+            ['EPC Score',   d.epcScore],
+            ['External ID', d.externalId],
+            ['Status',      d.sold ? 'Sold' : d.underOption ? 'Under Option' : 'Available'],
+            ['Description', d.description]
+        ];
+
+        var img = d.imageUrl
+            ? '<div class="text-center mb-3"><img src="' + esc(d.imageUrl) + '" style="max-height:200px;max-width:100%;object-fit:cover;border-radius:8px" onerror="this.style.display=\'none\'" /></div>'
+            : '';
+
+        var tableRows = rows.map(function (r) {
+            var val = r[1];
+            if (val == null || val === '') return '';
+            return '<tr><th class="text-muted fw-normal" style="width:35%;white-space:nowrap">' + esc(r[0]) + '</th><td>' + esc(String(val)) + '</td></tr>';
+        }).join('');
+
+        return img + '<table class="table table-sm table-borderless mb-0"><tbody>' + tableRows + '</tbody></table>';
+    }
+
+    function esc(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+})();
+</script>
+}

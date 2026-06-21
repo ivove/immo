@@ -100,6 +100,14 @@
                             <i class="bi bi-gear"></i> Configure Parser
                         </a>
                     </div>
+                    @if (!isJsonApi)
+                    {
+                        <div class="d-grid gap-2 mb-2">
+                            <a asp-action="VisualConfig" asp-route-agencyId="@Model.Id" class="btn btn-outline-info">
+                                <i class="bi bi-cursor me-1"></i> Visual Config Builder
+                            </a>
+                        </div>
+                    }
                     <div class="d-grid gap-2 mb-2">
                         <form asp-action="ReparseData" asp-route-id="@Model.Id" method="post" class="d-grid"
                               onsubmit="return confirm('Reparse all existing pages for \'@Model.AgencyDomain\'?')">

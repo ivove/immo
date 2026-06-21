@@ -471,23 +471,291 @@ public class AgenciesController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> EditParserConfig(ParserConfig config)
     {
+        var isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest";
+
         if (ModelState.IsValid)
         {
             if (config.Id == 0)
-            {
                 _context.ParserConfigs.Add(config);
-            }
             else
-            {
                 _context.Update(config);
-            }
             await _context.SaveChangesAsync();
+
+            if (isAjax) return Json(new { success = true, configId = config.Id });
             return RedirectToAction(nameof(Edit), new { id = config.AgencyId });
         }
+
+        if (isAjax)
+        {
+            var errors = ModelState.Values
+                .SelectMany(v => v.Errors)
+                .Select(e => e.ErrorMessage);
+            return Json(new { success = false, errors });
+        }
+
         var agency = await _context.Agencies.FindAsync(config.AgencyId);
         ViewData["DataSourceType"] = agency?.DataSourceType;
         return View(config);
     }
+
+    // GET: Agencies/ParsePreview?agencyId=5&url=...
+    public async Task<IActionResult> ParsePreview(int agencyId, string url)
+    {
+        var agency = await _context.Agencies
+            .Include(a => a.ParserConfig)
+            .FirstOrDefaultAsync(a => a.Id == agencyId);
+        if (agency == null) return NotFound();
+
+        if (string.IsNullOrWhiteSpace(url))
+            return BadRequest("URL required");
+
+        try
+        {
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            client.Timeout = TimeSpan.FromSeconds(30);
+            var html = await (await client.GetAsync(url)).Content.ReadAsStringAsync();
+
+            var doc = new HtmlAgilityPack.HtmlDocument();
+            doc.LoadHtml(html);
+
+            var rawPage = new Immo.Data.Entities.RawPage { Url = url, HtmlContent = html, AgencyId = agencyId, CrawledAt = DateTime.UtcNow };
+            var parser = new Immo.Parser.Strategies.ConfigurableParserStrategy(_context);
+            var prop = parser.Parse(rawPage, doc);
+
+            if (prop == null)
+                return Json(new { error = "Parser returned no result. Check that a parser config exists for this agency." });
+
+            return Json(new
+            {
+                title       = prop.Title,
+                price       = prop.Price,
+                city        = prop.City,
+                zipCode     = prop.ZipCode,
+                bedrooms    = prop.Bedrooms,
+                livingArea  = prop.LivingArea,
+                plotArea    = prop.PlotArea,
+                epcScore    = prop.EpcScore,
+                description = prop.Description != null && prop.Description.Length > 300
+                                ? prop.Description[..300] + "…"
+                                : prop.Description,
+                imageUrl    = prop.ImageUrl,
+                externalId  = prop.ExternalId,
+                sold        = prop.Sold,
+                underOption = prop.UnderOption
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ParsePreview failed for agency {AgencyId}, URL {Url}", agencyId, url);
+            return Json(new { error = ex.Message });
+        }
+    }
+
+    // GET: Agencies/ParseSpecTable
+    public async Task<IActionResult> ParseSpecTable(
+        int agencyId, string url,
+        string? containerSelector, string? labelSelector, string? valueSelector)
+    {
+        var agency = await _context.Agencies.FindAsync(agencyId);
+        if (agency == null) return NotFound();
+
+        if (string.IsNullOrWhiteSpace(url))
+            return BadRequest("URL required");
+
+        if (string.IsNullOrWhiteSpace(containerSelector))
+            return Json(new { error = "Row Container selector is empty — fill it in first." });
+
+        try
+        {
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            client.Timeout = TimeSpan.FromSeconds(30);
+            var html = await (await client.GetAsync(url)).Content.ReadAsStringAsync();
+
+            var doc = new HtmlAgilityPack.HtmlDocument();
+            doc.LoadHtml(html);
+
+            var rows = doc.DocumentNode.SelectNodes(containerSelector);
+            if (rows == null || rows.Count == 0)
+                return Json(new { error = "No rows matched the Row Container selector." });
+
+            var results = rows
+                .Select(row => new
+                {
+                    label = row.SelectSingleNode(labelSelector ?? ".")?.InnerText?.Trim() ?? "",
+                    value = row.SelectSingleNode(valueSelector ?? ".")?.InnerText?.Trim() ?? ""
+                })
+                .Where(r => !string.IsNullOrEmpty(r.label) || !string.IsNullOrEmpty(r.value))
+                .ToList();
+
+            return Json(results);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ParseSpecTable failed for agency {AgencyId}, URL {Url}", agencyId, url);
+            return Json(new { error = ex.Message });
+        }
+    }
+
+    // GET: Agencies/VisualConfig/5
+    public async Task<IActionResult> VisualConfig(int agencyId)
+    {
+        var agency = await _context.Agencies
+            .Include(a => a.ParserConfig)
+            .FirstOrDefaultAsync(a => a.Id == agencyId);
+        if (agency == null) return NotFound();
+
+        if (agency.DataSourceType == "json_api")
+        {
+            TempData["ErrorMessage"] = "Visual Config Builder is only available for HTML scraping agencies.";
+            return RedirectToAction(nameof(Edit), new { id = agencyId });
+        }
+
+        var config = agency.ParserConfig ?? new ParserConfig { AgencyId = agencyId };
+        ViewBag.AgencyDomain = agency.AgencyDomain;
+        return View(config);
+    }
+
+    // GET: Agencies/ProxyPage
+    public async Task<IActionResult> ProxyPage(int agencyId, string url)
+    {
+        var agency = await _context.Agencies.FindAsync(agencyId);
+        if (agency == null) return NotFound();
+
+        if (string.IsNullOrWhiteSpace(url)
+            || !Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            || (uri.Scheme != "http" && uri.Scheme != "https"))
+            return BadRequest("Invalid URL");
+
+        try
+        {
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            client.Timeout = TimeSpan.FromSeconds(30);
+            var html = await (await client.GetAsync(url)).Content.ReadAsStringAsync();
+            return Content(InjectVisualBuilderScript(html, url), "text/html");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "VisualConfig proxy failed for URL {Url}", url);
+            var msg = System.Net.WebUtility.HtmlEncode(ex.Message);
+            return Content($"<html><body style='font-family:sans-serif;padding:2rem'><h3>Failed to load page</h3><p>{msg}</p></body></html>", "text/html");
+        }
+    }
+
+    private static string InjectVisualBuilderScript(string html, string pageUrl)
+    {
+        var origin = new Uri(pageUrl).GetLeftPart(UriPartial.Authority);
+
+        // Strip all <script> blocks so the browser DOM matches the raw HTML the parser sees.
+        // Without this, page JS can reorder/insert elements and make positional XPaths wrong.
+        html = System.Text.RegularExpressions.Regex.Replace(html, @"<script[\s\S]*?</script>", "",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase, TimeSpan.FromSeconds(10));
+
+        // Remove any existing <base> tags
+        html = System.Text.RegularExpressions.Regex.Replace(html, @"<base[^>]*?>", "",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase, TimeSpan.FromSeconds(5));
+
+        // Inject <base> pointing to the original origin so CSS and images still load
+        var baseTag = $"""<base href="{origin}/">""";
+        html = System.Text.RegularExpressions.Regex.Replace(html, @"<head(\s[^>]*)?>",
+            m => m.Value + baseTag,
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase, TimeSpan.FromSeconds(5));
+
+        // Inject click-capture script before </body>
+        var script = $"\n<script>\n{VisualPickerScript}\n</script>\n";
+        var bodyClose = html.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
+        html = bodyClose >= 0 ? html.Insert(bodyClose, script) : html + script;
+
+        return html;
+    }
+
+    private const string VisualPickerScript = """
+        (function () {
+            var s = document.createElement('style');
+            s.textContent = '* { cursor: crosshair !important; user-select: none !important; } ' +
+                '.immo-hover { outline: 2px dashed #4361ee !important; background: rgba(67,97,238,0.06) !important; } ' +
+                '.immo-selected { outline: 3px solid #e63946 !important; background: rgba(230,57,70,0.09) !important; }';
+            document.head.appendChild(s);
+
+            var hovered = null;
+
+            document.addEventListener('mouseover', function (e) {
+                if (hovered) hovered.classList.remove('immo-hover');
+                hovered = e.target;
+                if (!hovered.classList.contains('immo-selected')) hovered.classList.add('immo-hover');
+            });
+            document.addEventListener('mouseout', function (e) { e.target.classList.remove('immo-hover'); });
+
+            document.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                var el = e.target;
+                var xpath = getXPath(el);
+                var text = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim().substring(0, 150);
+                window.parent.postMessage({ type: 'immo:pick', xpath: xpath, text: text }, '*');
+            }, true);
+
+            window.addEventListener('message', function (e) {
+                if (!e.data || e.data.type !== 'immo:highlight') return;
+                document.querySelectorAll('.immo-selected').forEach(function (x) { x.classList.remove('immo-selected'); });
+                if (!e.data.xpath) return;
+                try {
+                    var res = document.evaluate(e.data.xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+                    for (var i = 0; i < res.snapshotLength; i++) res.snapshotItem(i).classList.add('immo-selected');
+                } catch (_) {}
+            });
+
+            function getXPath(el) {
+                if (el.id) return '//' + el.tagName.toLowerCase() + '[@id=\'' + el.id.replace(/'/g, "\\'") + '\']';
+                if (el.className && typeof el.className === 'string') {
+                    var cls = el.className.trim().split(/\s+/).filter(function (c) { return c && !c.startsWith('immo-'); });
+                    if (cls.length) {
+                        var best = cls.slice().sort(function (a, b) { return b.length - a.length; })[0];
+                        return '//' + el.tagName.toLowerCase() + '[contains(@class,\'' + best.replace(/'/g, "\\'") + '\')]';
+                    }
+                }
+                return buildPath(el);
+            }
+
+            function buildPath(el) {
+                var parts = [], cur = el;
+                while (cur && cur.nodeType === 1 && cur !== document.documentElement) {
+                    var idx = 1, sib = cur.previousSibling;
+                    while (sib) { if (sib.nodeType === 1 && sib.tagName === cur.tagName) idx++; sib = sib.previousSibling; }
+                    parts.unshift(cur.tagName.toLowerCase() + (idx > 1 ? '[' + idx + ']' : ''));
+                    cur = cur.parentNode;
+                }
+                return '//' + parts.join('/');
+            }
+
+            // After CSS finishes loading, flatten positioned elements so nothing
+            // floats over the content the user is trying to click.
+            // - fixed/sticky: navbars, cookie banners, chat widgets
+            // - absolute: image slider frames, gallery overlays (all stacked at top:0/left:0 without JS)
+            window.addEventListener('load', function () {
+                document.querySelectorAll('*').forEach(function (el) {
+                    var pos = getComputedStyle(el).position;
+                    if (pos === 'fixed' || pos === 'sticky' || pos === 'absolute') {
+                        el.style.setProperty('position', 'relative', 'important');
+                        el.style.setProperty('top',    'auto', 'important');
+                        el.style.setProperty('left',   'auto', 'important');
+                        el.style.setProperty('right',  'auto', 'important');
+                        el.style.setProperty('bottom', 'auto', 'important');
+                        el.style.setProperty('z-index', 'auto', 'important');
+                        el.style.setProperty('transform', 'none', 'important');
+                    }
+                });
+
+                // Hide all images after the first to suppress gallery/slider clutter.
+                var imgs = document.querySelectorAll('img');
+                for (var i = 1; i < imgs.length; i++) {
+                    imgs[i].style.setProperty('display', 'none', 'important');
+                }
+            });
+        })();
+        """;
 
     // GET: Agencies/Export
     public async Task<IActionResult> Export()
