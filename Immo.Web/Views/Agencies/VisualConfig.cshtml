@@ -224,7 +224,14 @@
                            class="form-control form-control-sm" placeholder="/(\d+)$" autocomplete="off" />
                 </div>
 
-                <div class="section-title">Spec Table (Key-Value Pairs)</div>
+                <div class="section-title d-flex justify-content-between align-items-center">
+                    <span>Spec Table (Key-Value Pairs)</span>
+                    <button type="button" id="mapLabelsBtn" class="btn btn-outline-secondary btn-sm py-0" disabled
+                            data-bs-toggle="modal" data-bs-target="#specMapModal"
+                            title="Parse the spec table and map labels to fields">
+                        <i class="bi bi-table me-1"></i>Map Labels
+                    </button>
+                </div>
 
                 <div class="field-row">
                     <label>Row Container <span class="text-muted fw-normal">(e.g. //tr or //dl/div)</span></label>
@@ -359,6 +366,30 @@
     </div>
 </div>
 
+<!-- Spec table mapping modal -->
+<div class="modal fade" id="specMapModal" tabindex="-1" aria-labelledby="specMapModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content rounded-4">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h5 class="modal-title fw-bold" id="specMapModalLabel">
+                    <i class="bi bi-table me-2 text-secondary"></i>Spec Table — Map Labels
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="specMapModalBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2 text-muted small">Parsing spec table…</p>
+                </div>
+            </div>
+            <div class="modal-footer border-top-0">
+                <small class="text-muted me-auto">Select a field to assign a spec label to its label mapping input.</small>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Parse result modal -->
 <div class="modal fade" id="parseModal" tabindex="-1" aria-labelledby="parseModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -486,6 +517,7 @@
             overlayLoading.style.display = 'none';
             frame.style.display = 'block';
             parseBtn.disabled = false;
+            document.getElementById('mapLabelsBtn').disabled = false;
             if (activeInput && activeInput.value) {
                 setTimeout(function () { highlightInFrame(activeInput.value); }, 300);
             }
@@ -499,6 +531,7 @@
         currentUrl = url;
         frameReady = false;
         parseBtn.disabled = true;
+        document.getElementById('mapLabelsBtn').disabled = true;
         frame.style.display = 'none';
         overlayPlaceholder.style.display = 'none';
         overlayLoading.style.display = '';
@@ -565,6 +598,89 @@
             submitBtn.innerHTML = '<i class="bi bi-save me-1"></i>Save Configuration';
         });
     });
+
+    // ── Spec map modal ────────────────────────────────────────────────────────
+    var specMapModalEl = document.getElementById('specMapModal');
+    var specMapBody    = document.getElementById('specMapModalBody');
+
+    // label fields: [inputName, displayName]
+    var labelFields = [
+        ['BedroomLabel',   'Bedrooms'],
+        ['LivingAreaLabel','Living Area'],
+        ['PlotAreaLabel',  'Plot Area'],
+        ['EpcLabel',       'EPC'],
+        ['ReferenceLabel', 'Reference'],
+        ['AddressLabel',   'Address'],
+        ['ZipCodeLabel',   'Zip Code'],
+        ['CityLabel',      'City'],
+        ['PriceLabel',     'Price']
+    ];
+
+    specMapModalEl.addEventListener('show.bs.modal', function () {
+        specMapBody.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted small">Parsing spec table…</p></div>';
+
+        var containerSel = (document.querySelector('input[name="SpecContainerSelector"]') || {}).value || '';
+        var labelSel     = (document.querySelector('input[name="SpecLabelSelector"]') || {}).value || '';
+        var valueSel     = (document.querySelector('input[name="SpecValueSelector"]') || {}).value || '';
+
+        var params = new URLSearchParams({
+            agencyId:          agencyId,
+            url:               currentUrl,
+            containerSelector: containerSel,
+            labelSelector:     labelSel,
+            valueSelector:     valueSel
+        });
+
+        fetch('/Agencies/ParseSpecTable?' + params)
+            .then(function (r) { return r.json(); })
+            .then(function (d) { specMapBody.innerHTML = renderSpecTable(d); bindSpecAssign(); })
+            .catch(function (err) { specMapBody.innerHTML = '<div class="alert alert-danger">' + esc(err.message) + '</div>'; });
+    });
+
+    function renderSpecTable(d) {
+        if (d.error) return '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-1"></i>' + esc(d.error) + '</div>';
+        if (!Array.isArray(d) || d.length === 0) return '<p class="text-muted text-center py-3">No spec rows found.</p>';
+
+        var optHtml = '<option value="">— assign to —</option>' +
+            labelFields.map(function (f) { return '<option value="' + f[0] + '">' + f[1] + '</option>'; }).join('');
+
+        var rows = d.map(function (row, i) {
+            return '<tr>' +
+                '<td class="align-middle text-muted small" style="width:40%">' + esc(row.label) + '</td>' +
+                '<td class="align-middle" style="width:35%">' + esc(row.value) + '</td>' +
+                '<td style="width:25%">' +
+                    '<div class="d-flex align-items-center gap-1">' +
+                        '<select class="form-select form-select-sm spec-assign-select" data-label="' + esc(row.label) + '" data-row="' + i + '">' + optHtml + '</select>' +
+                        '<i class="bi bi-check-circle-fill text-success spec-check-' + i + '" style="display:none;font-size:1.1rem"></i>' +
+                    '</div>' +
+                '</td>' +
+            '</tr>';
+        }).join('');
+
+        return '<table class="table table-sm table-hover mb-0">' +
+            '<thead class="table-light"><tr><th>Label</th><th>Value</th><th>Assign to</th></tr></thead>' +
+            '<tbody>' + rows + '</tbody>' +
+            '</table>';
+    }
+
+    function bindSpecAssign() {
+        specMapBody.querySelectorAll('.spec-assign-select').forEach(function (sel) {
+            sel.addEventListener('change', function () {
+                if (!sel.value) return;
+                var targetInput = configForm.querySelector('input[name="' + sel.value + '"]');
+                if (targetInput) {
+                    targetInput.value = sel.dataset.label;
+                    // Flash the target input in the sidebar
+                    targetInput.classList.add('active-pick');
+                    setTimeout(function () { targetInput.classList.remove('active-pick'); }, 1200);
+                }
+                var rowIdx = sel.dataset.row;
+                var check = specMapBody.querySelector('.spec-check-' + rowIdx);
+                if (check) check.style.display = '';
+                sel.value = '';   // reset so it can be reassigned
+            });
+        });
+    }
 
     // ── Parse modal ───────────────────────────────────────────────────────────
     var parseModalEl = document.getElementById('parseModal');

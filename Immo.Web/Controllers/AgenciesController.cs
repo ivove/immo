@@ -566,6 +566,52 @@ public class AgenciesController : Controller
         }
     }
 
+    // GET: Agencies/ParseSpecTable
+    public async Task<IActionResult> ParseSpecTable(
+        int agencyId, string url,
+        string? containerSelector, string? labelSelector, string? valueSelector)
+    {
+        var agency = await _context.Agencies.FindAsync(agencyId);
+        if (agency == null) return NotFound();
+
+        if (string.IsNullOrWhiteSpace(url))
+            return BadRequest("URL required");
+
+        if (string.IsNullOrWhiteSpace(containerSelector))
+            return Json(new { error = "Row Container selector is empty — fill it in first." });
+
+        try
+        {
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            client.Timeout = TimeSpan.FromSeconds(30);
+            var html = await (await client.GetAsync(url)).Content.ReadAsStringAsync();
+
+            var doc = new HtmlAgilityPack.HtmlDocument();
+            doc.LoadHtml(html);
+
+            var rows = doc.DocumentNode.SelectNodes(containerSelector);
+            if (rows == null || rows.Count == 0)
+                return Json(new { error = "No rows matched the Row Container selector." });
+
+            var results = rows
+                .Select(row => new
+                {
+                    label = row.SelectSingleNode(labelSelector ?? ".")?.InnerText?.Trim() ?? "",
+                    value = row.SelectSingleNode(valueSelector ?? ".")?.InnerText?.Trim() ?? ""
+                })
+                .Where(r => !string.IsNullOrEmpty(r.label) || !string.IsNullOrEmpty(r.value))
+                .ToList();
+
+            return Json(results);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ParseSpecTable failed for agency {AgencyId}, URL {Url}", agencyId, url);
+            return Json(new { error = ex.Message });
+        }
+    }
+
     // GET: Agencies/VisualConfig/5
     public async Task<IActionResult> VisualConfig(int agencyId)
     {
@@ -616,11 +662,16 @@ public class AgenciesController : Controller
     {
         var origin = new Uri(pageUrl).GetLeftPart(UriPartial.Authority);
 
+        // Strip all <script> blocks so the browser DOM matches the raw HTML the parser sees.
+        // Without this, page JS can reorder/insert elements and make positional XPaths wrong.
+        html = System.Text.RegularExpressions.Regex.Replace(html, @"<script[\s\S]*?</script>", "",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase, TimeSpan.FromSeconds(10));
+
         // Remove any existing <base> tags
         html = System.Text.RegularExpressions.Regex.Replace(html, @"<base[^>]*?>", "",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase, TimeSpan.FromSeconds(5));
 
-        // Inject <base> pointing to the original origin so all relative assets resolve correctly
+        // Inject <base> pointing to the original origin so CSS and images still load
         var baseTag = $"""<base href="{origin}/">""";
         html = System.Text.RegularExpressions.Regex.Replace(html, @"<head(\s[^>]*)?>",
             m => m.Value + baseTag,
@@ -692,6 +743,31 @@ public class AgenciesController : Controller
                 }
                 return '//' + parts.join('/');
             }
+
+            // After CSS finishes loading, flatten positioned elements so nothing
+            // floats over the content the user is trying to click.
+            // - fixed/sticky: navbars, cookie banners, chat widgets
+            // - absolute: image slider frames, gallery overlays (all stacked at top:0/left:0 without JS)
+            window.addEventListener('load', function () {
+                document.querySelectorAll('*').forEach(function (el) {
+                    var pos = getComputedStyle(el).position;
+                    if (pos === 'fixed' || pos === 'sticky' || pos === 'absolute') {
+                        el.style.setProperty('position', 'relative', 'important');
+                        el.style.setProperty('top',    'auto', 'important');
+                        el.style.setProperty('left',   'auto', 'important');
+                        el.style.setProperty('right',  'auto', 'important');
+                        el.style.setProperty('bottom', 'auto', 'important');
+                        el.style.setProperty('z-index', 'auto', 'important');
+                        el.style.setProperty('transform', 'none', 'important');
+                    }
+                });
+
+                // Hide all images after the first to suppress gallery/slider clutter.
+                var imgs = document.querySelectorAll('img');
+                for (var i = 1; i < imgs.length; i++) {
+                    imgs[i].style.setProperty('display', 'none', 'important');
+                }
+            });
         })();
         """;
 
