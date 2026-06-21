@@ -127,6 +127,14 @@
                             </a>
                         </div>
                     }
+                    @if (isHtmlJson)
+                    {
+                        <div class="d-grid gap-2 mb-2">
+                            <a asp-action="VisualHtmlJsonConfig" asp-route-agencyId="@Model.Id" class="btn btn-outline-warning">
+                                <i class="bi bi-file-earmark-code me-1"></i><i class="bi bi-braces me-1"></i> Visual HTML+JSON Config Builder
+                            </a>
+                        </div>
+                    }
                     <div class="d-grid gap-2 mb-2">
                         <form asp-action="ReparseData" asp-route-id="@Model.Id" method="post" class="d-grid"
                               onsubmit="return confirm('Reparse all existing pages for \'@Model.AgencyDomain\'?')">
