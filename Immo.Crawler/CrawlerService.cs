@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using Immo.Data;
 using Immo.Data.Entities;
 using Immo.Crawler.Extractors;
@@ -177,6 +178,106 @@ public class CrawlerService
     }
 
     /// <summary>
+    /// Fetches the JSON detail endpoint for an individual property discovered via HTML listing crawl.
+    /// The <see cref="RawPage"/> is keyed as <c>json-detail://&lt;htmlPropertyUrl&gt;</c> so the
+    /// human-readable URL is preserved; <c>HtmlContent</c> holds the JSON response.
+    /// Requires <see cref="ParserConfig.ExternalIdPattern"/> and <see cref="ParserConfig.JsonDetailUrlTemplate"/>
+    /// to be configured on the agency.
+    /// </summary>
+    public async Task CrawlHtmlJsonPageAsync(string htmlPropertyUrl, int? agencyId)
+    {
+        var storedUrl = "json-detail://" + htmlPropertyUrl;
+        _crawledPropertyUrls.Add(storedUrl);
+
+        try
+        {
+            var config = agencyId.HasValue
+                ? _context.ParserConfigs.FirstOrDefault(c => c.AgencyId == agencyId.Value)
+                : null;
+
+            if (config?.JsonDetailUrlTemplate == null || config.ExternalIdPattern == null)
+            {
+                _logger.LogWarning("html_json agency {Id} is missing ExternalIdPattern or JsonDetailUrlTemplate — skipping {Url}", agencyId, htmlPropertyUrl);
+                return;
+            }
+
+            var match = Regex.Match(htmlPropertyUrl, config.ExternalIdPattern);
+            if (!match.Success || match.Groups.Count < 2)
+            {
+                _logger.LogWarning("ExternalIdPattern '{Pattern}' did not match {Url}", config.ExternalIdPattern, htmlPropertyUrl);
+                return;
+            }
+            var externalId = match.Groups[1].Value;
+            var jsonUrl = config.JsonDetailUrlTemplate.Replace("{id}", externalId);
+
+            var existing = _context.RawPages.FirstOrDefault(p => p.Url == storedUrl);
+            if (existing != null)
+            {
+                var settings = _context.AppSettings.FirstOrDefault() ?? new AppSettings();
+                var age = DateTime.UtcNow - existing.CrawledAt;
+                if (age.TotalDays < settings.RecrawlAfterDays)
+                {
+                    _logger.LogInformation("Skipping {Url} — crawled {Hours:F0}h ago", htmlPropertyUrl, age.TotalHours);
+                    return;
+                }
+            }
+
+            await ApplyRateLimit();
+            using var response = await FetchResponseAsync(jsonUrl);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                _logger.LogInformation("JSON detail {Url} returned 404. Marking property as sold.", jsonUrl);
+                if (existing != null)
+                {
+                    var property = _context.Properties.FirstOrDefault(p => p.RawPageId == existing.Id);
+                    if (property != null && !property.Sold)
+                    {
+                        property.Sold = true;
+                        await _context.SaveChangesAsync();
+                    }
+                }
+                return;
+            }
+
+            response.EnsureSuccessStatusCode();
+            var jsonContent = await response.Content.ReadAsStringAsync();
+            var hash = ComputeHash(jsonContent);
+
+            if (existing != null)
+            {
+                if (hash != existing.ContentHash)
+                {
+                    existing.HtmlContent = jsonContent;
+                    existing.ContentHash = hash;
+                    existing.IsParsed    = false;
+                    _logger.LogInformation("JSON detail changed for {Url} — marked for re-parse", htmlPropertyUrl);
+                }
+                existing.CrawledAt = DateTime.UtcNow;
+            }
+            else
+            {
+                _context.RawPages.Add(new RawPage
+                {
+                    Url         = storedUrl,
+                    HtmlContent = jsonContent,
+                    ContentHash = hash,
+                    CrawledAt   = DateTime.UtcNow,
+                    IsParsed    = false,
+                    AgencyId    = agencyId
+                });
+                _logger.LogInformation("Saved new json-detail page {Url} (hash: {Hash})", htmlPropertyUrl, hash[..8]);
+            }
+
+            await _context.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error crawling JSON detail for {Url}", htmlPropertyUrl);
+        }
+    }
+
+    /// <summary>
     /// Fetches a JSON listing API endpoint and stores the raw JSON as a single <see cref="RawPage"/>.
     /// The page URL is stored with a <c>json-api://</c> prefix so the parser can identify it.
     /// On recrawl the content hash is compared; if unchanged only the timestamp is bumped.
@@ -280,14 +381,21 @@ public class CrawlerService
 
             agencyId ??= ResolveAgencyId(listingUrl);
 
+            var agency = agencyId.HasValue
+                ? _context.Agencies.FirstOrDefault(a => a.Id == agencyId.Value)
+                : _context.Agencies.FirstOrDefault(a => a.AgencyDomain.Contains(new Uri(listingUrl).Host.Replace("www.", "")));
+
             var propertyLinks = extractor.ExtractLinks(htmlContent, listingUrl, agencyUrl).ToList();
             _logger.LogInformation("Found {Count} property links on {Url}", propertyLinks.Count, listingUrl);
             foreach (var link in propertyLinks)
-                await CrawlPageAsync(link, agencyId);
-
-            var agency = _context.Agencies.FirstOrDefault(a => a.AgencyDomain.Contains(new Uri(listingUrl).Host.Replace("www.", "")));
+            {
+                if (agency?.DataSourceType == "html_json")
+                    await CrawlHtmlJsonPageAsync(link, agencyId);
+                else
+                    await CrawlPageAsync(link, agencyId);
+            }
             if (agency?.PaginationSelector != null)
-                await FollowPaginationAsync(htmlContent, listingUrl, agencyUrl, agencyId, agency.PaginationSelector);
+                await FollowPaginationAsync(htmlContent, listingUrl, agencyUrl, agencyId ?? agency.Id, agency.PaginationSelector);
         }
         catch (Exception ex)
         {
@@ -328,7 +436,8 @@ public class CrawlerService
         var allPages = _context.RawPages.Select(p => new { p.Id, p.Url }).ToList();
         // Skip json-api:// pages — they have no individual detail URLs to check
         var unseenPages = allPages.Where(p => !_crawledPropertyUrls.Contains(p.Url)
-                                           && !p.Url.StartsWith("json-api://", StringComparison.OrdinalIgnoreCase)).ToList();
+                                           && !p.Url.StartsWith("json-api://", StringComparison.OrdinalIgnoreCase)
+                                           && !p.Url.StartsWith("json-detail://", StringComparison.OrdinalIgnoreCase)).ToList();
         
         _logger.LogInformation("Found {Count} unseen pages to verify.", unseenPages.Count);
         

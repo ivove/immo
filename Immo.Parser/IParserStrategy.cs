@@ -6,5 +6,5 @@ namespace Immo.Parser;
 public interface IParserStrategy
 {
     bool CanParse(string url);
-    Property Parse(RawPage page, HtmlDocument? document);
+    Property? Parse(RawPage page, HtmlDocument? document);
 }

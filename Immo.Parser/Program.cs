@@ -39,6 +39,7 @@ builder.Services.AddDbContext<ImmoContext>(options =>
 // Register strategies
 builder.Services.AddTransient<IParserStrategy, ConfigurableParserStrategy>();
 builder.Services.AddTransient<IParserStrategy, JsonApiParserStrategy>();
+builder.Services.AddTransient<IParserStrategy, JsonDetailParserStrategy>();
 builder.Services.AddTransient<ParserService>();
 
 // Register Worker

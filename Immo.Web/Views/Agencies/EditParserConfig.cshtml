@@ -2,7 +2,10 @@
 
 @{
     ViewData["Title"] = "Parser Configuration";
-    var isJsonApi = ViewData["DataSourceType"]?.ToString() == "json_api";
+    var dataSourceType = ViewData["DataSourceType"]?.ToString();
+    var isJsonApi  = dataSourceType == "json_api";
+    var isHtmlJson = dataSourceType == "html_json";
+    var showJsonFields = isJsonApi || isHtmlJson;
 }
 
 <div class="container py-4">
@@ -22,6 +25,10 @@
                 {
                     <span class="badge bg-info text-dark fs-6"><i class="bi bi-braces me-1"></i>JSON API Mode</span>
                 }
+                else if (isHtmlJson)
+                {
+                    <span class="badge bg-warning text-dark fs-6"><i class="bi bi-file-earmark-code me-1"></i><i class="bi bi-braces me-1"></i>HTML Listing + JSON Detail</span>
+                }
                 else
                 {
                     <span class="badge bg-secondary fs-6"><i class="bi bi-file-earmark-code me-1"></i>HTML Mode</span>
@@ -33,9 +40,9 @@
                 <input type="hidden" asp-for="AgencyId" />
                 <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
-                @if (isJsonApi)
+                @if (showJsonFields)
                 {
-                    <!-- JSON API field paths -->
+                    <!-- JSON field paths (json_api and html_json) -->
                     <div class="row g-4">
                         <div class="col-md-6">
                             <h4 class="h5 fw-bold mb-3">Array & Identity</h4>
@@ -65,6 +72,19 @@
                                 <label asp-for="JsonExternalIdPath" class="form-label">External ID Path</label>
                                 <input asp-for="JsonExternalIdPath" class="form-control" placeholder="id" />
                             </div>
+
+                            @if (isHtmlJson)
+                            {
+                                <div class="alert alert-warning py-2 mb-3">
+                                    <strong>HTML Listing + JSON Detail</strong>: the crawler extracts the property ID from each HTML URL
+                                    using the regex below, then builds the JSON endpoint URL from the template.
+                                </div>
+                                <div class="mb-3">
+                                    <label asp-for="ExternalIdPattern" class="form-label">External ID Pattern <span class="text-danger">*</span></label>
+                                    <input asp-for="ExternalIdPattern" class="form-control" placeholder="/(\d+)-" />
+                                    <div class="form-text">Regex applied to the HTML property URL. Capture group 1 is used as <code>{id}</code>. Example: <code>/(\d+)-</code></div>
+                                </div>
+                            }
 
                             <hr class="my-3" />
                             <h4 class="h5 fw-bold mb-3">Property Type Filter</h4>
