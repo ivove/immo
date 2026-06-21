@@ -777,6 +777,83 @@ public class AgenciesController : Controller
         return View(config);
     }
 
+    // GET: Agencies/VisualHtmlJsonConfig/5
+    public async Task<IActionResult> VisualHtmlJsonConfig(int agencyId)
+    {
+        var agency = await _context.Agencies
+            .Include(a => a.ParserConfig)
+            .FirstOrDefaultAsync(a => a.Id == agencyId);
+        if (agency == null) return NotFound();
+
+        if (agency.DataSourceType != "html_json")
+        {
+            TempData["ErrorMessage"] = "HTML+JSON Visual Config Builder is only available for HTML Listing + JSON Detail agencies.";
+            return RedirectToAction(nameof(Edit), new { id = agencyId });
+        }
+
+        var config = agency.ParserConfig ?? new ParserConfig { AgencyId = agencyId };
+        ViewBag.AgencyDomain = agency.AgencyDomain;
+        return View(config);
+    }
+
+    // GET: Agencies/JsonDetailParsePreview
+    public async Task<IActionResult> JsonDetailParsePreview(int agencyId, string url)
+    {
+        var agency = await _context.Agencies
+            .Include(a => a.ParserConfig)
+            .FirstOrDefaultAsync(a => a.Id == agencyId);
+        if (agency == null) return NotFound();
+
+        if (string.IsNullOrWhiteSpace(url))
+            return BadRequest("URL required");
+
+        try
+        {
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            client.Timeout = TimeSpan.FromSeconds(30);
+            var content = await (await client.GetAsync(url)).Content.ReadAsStringAsync();
+
+            var rawPage = new RawPage
+            {
+                Url         = "json-detail://" + url,
+                HtmlContent = content,
+                AgencyId    = agencyId,
+                CrawledAt   = DateTime.UtcNow
+            };
+            var parser = new Immo.Parser.Strategies.JsonDetailParserStrategy(_context,
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<Immo.Parser.Strategies.JsonDetailParserStrategy>.Instance);
+            var prop = parser.Parse(rawPage, null);
+
+            if (prop == null)
+                return Json(new { error = "Could not parse a property. Check your configuration and make sure it has been saved." });
+
+            return Json(new
+            {
+                title       = prop.Title,
+                price       = prop.Price,
+                city        = prop.City,
+                zipCode     = prop.ZipCode,
+                bedrooms    = prop.Bedrooms,
+                livingArea  = prop.LivingArea,
+                plotArea    = prop.PlotArea,
+                epcScore    = prop.EpcScore,
+                description = prop.Description != null && prop.Description.Length > 200
+                                ? prop.Description[..200] + "…" : prop.Description,
+                imageUrl    = prop.ImageUrl,
+                externalId  = prop.ExternalId,
+                sourceUrl   = prop.SourceUrl,
+                sold        = prop.Sold,
+                underOption = prop.UnderOption
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "JsonDetailParsePreview failed for agency {AgencyId}, URL {Url}", agencyId, url);
+            return Json(new { error = ex.Message });
+        }
+    }
+
     // GET: Agencies/FetchJson
     public async Task<IActionResult> FetchJson(int agencyId, string url)
     {
