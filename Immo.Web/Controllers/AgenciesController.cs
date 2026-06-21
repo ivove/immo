@@ -215,20 +215,13 @@ public class AgenciesController : Controller
     {
         var agencyIds = await _context.Agencies.Select(a => a.Id).ToListAsync();
 
-        var orphanedProperties = await _context.Properties
+        var count = await _context.Properties
             .Where(p => p.AgencyId == null || !agencyIds.Contains(p.AgencyId.Value))
-            .ToListAsync();
+            .ExecuteDeleteAsync();
 
-        if (orphanedProperties.Count > 0)
-        {
-            _context.Properties.RemoveRange(orphanedProperties);
-            await _context.SaveChangesAsync();
-            TempData["SuccessMessage"] = $"Removed {orphanedProperties.Count} orphaned propert{(orphanedProperties.Count == 1 ? "y" : "ies")}.";
-        }
-        else
-        {
-            TempData["SuccessMessage"] = "No orphaned properties found.";
-        }
+        TempData["SuccessMessage"] = count > 0
+            ? $"Removed {count} orphaned propert{(count == 1 ? "y" : "ies")}."
+            : "No orphaned properties found.";
 
         return RedirectToAction(nameof(Index));
     }
@@ -343,9 +336,9 @@ public class AgenciesController : Controller
 
         if (agency == null) return NotFound();
 
-        ViewBag.AgencyId = agency.Id;
-        ViewBag.AgencyDomain = agency.AgencyDomain;
-        ViewBag.TestedUrl = urlToTest;
+        ViewBag.AgencyId       = agency.Id;
+        ViewBag.AgencyDomain   = agency.AgencyDomain;
+        ViewBag.TestedUrl      = urlToTest;
         ViewBag.DataSourceType = agency.DataSourceType;
 
         if (string.IsNullOrWhiteSpace(urlToTest))
@@ -363,48 +356,8 @@ public class AgenciesController : Controller
             var content = await response.Content.ReadAsStringAsync();
             ViewBag.RawHtmlLength = content.Length;
 
-            if (agency.DataSourceType == "json_api")
-            {
-                var rawPage = new Immo.Data.Entities.RawPage
-                {
-                    Url = "json-api://" + urlToTest,
-                    HtmlContent = content,
-                    AgencyId = agency.Id,
-                    CrawledAt = DateTime.UtcNow
-                };
-                var parser = new Immo.Parser.Strategies.JsonApiParserStrategy(_context);
-                ViewBag.ParsedProperties = parser.ParseMany(rawPage).ToList();
-            }
-            else
-            {
-                var doc = new HtmlAgilityPack.HtmlDocument();
-                doc.LoadHtml(content);
-
-                // 1. Pagination Extraction
-                var paginationLinks = new List<string>();
-                if (!string.IsNullOrEmpty(agency.PaginationSelector))
-                {
-                    var nodes = doc.DocumentNode.SelectNodes(agency.PaginationSelector);
-                    if (nodes != null)
-                    {
-                        paginationLinks = nodes.Select(n => n.GetAttributeValue("href", ""))
-                                               .Where(href => !string.IsNullOrEmpty(href))
-                                               .Select(href => new Uri(new Uri(urlToTest), href).ToString())
-                                               .Distinct()
-                                               .ToList();
-                    }
-                }
-                ViewBag.PaginationLinks = paginationLinks;
-
-                // 2. Property Link Extraction
-                var linkExtractor = new Immo.Crawler.Extractors.GeneralLinkExtractor(_context);
-                ViewBag.PropertyLinks = linkExtractor.ExtractLinks(content, urlToTest, agency.AgencyDomain).ToList();
-
-                // 3. Parser Strategy
-                var rawPage = new Immo.Data.Entities.RawPage { Url = urlToTest, HtmlContent = content, AgencyId = agency.Id, CrawledAt = DateTime.UtcNow };
-                var parser = new Immo.Parser.Strategies.ConfigurableParserStrategy(_context);
-                ViewBag.ParsedProperty = parser.Parse(rawPage, doc);
-            }
+            if (agency.DataSourceType == "json_api") RunJsonApiDebug(agency, urlToTest, content);
+            else                                      RunHtmlDebug(agency, urlToTest, content);
         }
         catch (Exception ex)
         {
@@ -412,6 +365,39 @@ public class AgenciesController : Controller
         }
 
         return View();
+    }
+
+    private void RunJsonApiDebug(Agency agency, string urlToTest, string content)
+    {
+        var rawPage = new RawPage { Url = "json-api://" + urlToTest, HtmlContent = content, AgencyId = agency.Id, CrawledAt = DateTime.UtcNow };
+        var parser  = new Immo.Parser.Strategies.JsonApiParserStrategy(_context,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<Immo.Parser.Strategies.JsonApiParserStrategy>.Instance);
+        ViewBag.ParsedProperties = parser.ParseMany(rawPage).ToList();
+    }
+
+    private void RunHtmlDebug(Agency agency, string urlToTest, string content)
+    {
+        var doc = new HtmlAgilityPack.HtmlDocument();
+        doc.LoadHtml(content);
+
+        var paginationLinks = new List<string>();
+        if (!string.IsNullOrEmpty(agency.PaginationSelector))
+        {
+            var nodes = doc.DocumentNode.SelectNodes(agency.PaginationSelector);
+            if (nodes != null)
+                paginationLinks = nodes
+                    .Select(n => n.GetAttributeValue("href", ""))
+                    .Where(href => !string.IsNullOrEmpty(href))
+                    .Select(href => new Uri(new Uri(urlToTest), href).ToString())
+                    .Distinct()
+                    .ToList();
+        }
+        ViewBag.PaginationLinks = paginationLinks;
+        ViewBag.PropertyLinks   = new Immo.Crawler.Extractors.GeneralLinkExtractor(_context)
+                                      .ExtractLinks(content, urlToTest, agency.AgencyDomain).ToList();
+
+        var rawPage = new RawPage { Url = urlToTest, HtmlContent = content, AgencyId = agency.Id, CrawledAt = DateTime.UtcNow };
+        ViewBag.ParsedProperty  = new Immo.Parser.Strategies.ConfigurableParserStrategy(_context).Parse(rawPage, doc);
     }
 
     // --- AgencyListingCheck Management ---
@@ -807,11 +793,8 @@ public class AgenciesController : Controller
         {
             _logger.LogInformation("Import preview requested. Analyzing file {FileName} ({Size} bytes).", importFile.FileName, importFile.Length);
             using var stream = importFile.OpenReadStream();
-            var options = new System.Text.Json.JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            };
-            var importedAgencies = await System.Text.Json.JsonSerializer.DeserializeAsync<List<Agency>>(stream, options);
+            var importedAgencies = await System.Text.Json.JsonSerializer.DeserializeAsync<List<Agency>>(
+                stream, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (importedAgencies == null || importedAgencies.Count == 0)
             {
@@ -820,41 +803,10 @@ public class AgenciesController : Controller
                 return RedirectToAction(nameof(Index));
             }
 
-            // Let's analyze new vs conflicting
-            var existingDomains = await _context.Agencies
-                .Select(a => a.AgencyDomain)
-                .ToListAsync();
+            var existingDomains = await _context.Agencies.Select(a => a.AgencyDomain).ToListAsync();
+            var viewModel = BuildImportPreview(importedAgencies, existingDomains);
 
-            var viewModel = new ImportPreviewViewModel();
-            var serializeOptions = new System.Text.Json.JsonSerializerOptions
-            {
-                ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles
-            };
-            viewModel.SerializedData = System.Text.Json.JsonSerializer.Serialize(importedAgencies, serializeOptions);
-
-            foreach (var imported in importedAgencies)
-            {
-                var isExisting = existingDomains.Contains(imported.AgencyDomain, StringComparer.OrdinalIgnoreCase);
-                var preview = new ImportAgencyPreview
-                {
-                    AgencyDomain = imported.AgencyDomain,
-                    HasParserConfig = imported.ParserConfig != null,
-                    ListingChecksCount = imported.AgencyListingChecks?.Count ?? 0,
-                    Notes = imported.Notes,
-                    IsSuspended = imported.IsSuspended
-                };
-
-                if (isExisting)
-                {
-                    viewModel.ConflictingAgencies.Add(preview);
-                }
-                else
-                {
-                    viewModel.NewAgencies.Add(preview);
-                }
-            }
-
-            _logger.LogInformation("Import analysis complete. Found {NewCount} new domains and {ConflictCount} existing domains in imported file.", 
+            _logger.LogInformation("Import analysis complete. Found {NewCount} new and {ConflictCount} existing domains.",
                 viewModel.NewAgencies.Count, viewModel.ConflictingAgencies.Count);
 
             return View("ImportPreview", viewModel);
@@ -865,6 +817,36 @@ public class AgenciesController : Controller
             TempData["ErrorMessage"] = $"Error analyzing import file: {ex.Message}";
             return RedirectToAction(nameof(Index));
         }
+    }
+
+    private static ImportPreviewViewModel BuildImportPreview(List<Agency> importedAgencies, List<string> existingDomains)
+    {
+        var viewModel = new ImportPreviewViewModel
+        {
+            SerializedData = System.Text.Json.JsonSerializer.Serialize(importedAgencies,
+                new System.Text.Json.JsonSerializerOptions
+                {
+                    ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles
+                })
+        };
+
+        foreach (var imported in importedAgencies)
+        {
+            var preview = new ImportAgencyPreview
+            {
+                AgencyDomain       = imported.AgencyDomain,
+                HasParserConfig    = imported.ParserConfig != null,
+                ListingChecksCount = imported.AgencyListingChecks?.Count ?? 0,
+                Notes              = imported.Notes,
+                IsSuspended        = imported.IsSuspended
+            };
+            var bucket = existingDomains.Contains(imported.AgencyDomain, StringComparer.OrdinalIgnoreCase)
+                ? viewModel.ConflictingAgencies
+                : viewModel.NewAgencies;
+            bucket.Add(preview);
+        }
+
+        return viewModel;
     }
 
     // POST: Agencies/ConfirmImport
@@ -881,105 +863,27 @@ public class AgenciesController : Controller
         try
         {
             _logger.LogInformation("ConfirmImport requested to persist parsed agencies.");
-            var options = new System.Text.Json.JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            };
-            var importedAgencies = System.Text.Json.JsonSerializer.Deserialize<List<Agency>>(serializedData, options);
+            var importedAgencies = System.Text.Json.JsonSerializer.Deserialize<List<Agency>>(
+                serializedData, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (importedAgencies != null)
             {
-                int newCount = 0;
-                int mergedCount = 0;
+                int newCount = 0, mergedCount = 0;
 
                 foreach (var imported in importedAgencies)
                 {
-                    // Find existing by domain
                     var existing = await _context.Agencies
                         .Include(a => a.AgencyListingChecks)
                         .Include(a => a.ParserConfig)
                         .FirstOrDefaultAsync(a => a.AgencyDomain == imported.AgencyDomain);
 
-                    if (existing == null)
-                    {
-                        _logger.LogInformation("Import: Adding new agency domain {AgencyDomain}.", imported.AgencyDomain);
-                        // Insert new, reset IDs
-                        imported.Id = 0;
-                        if (imported.ParserConfig != null) imported.ParserConfig.Id = 0;
-                        if (imported.AgencyListingChecks != null)
-                        {
-                            foreach (var check in imported.AgencyListingChecks) check.Id = 0;
-                        }
-                        _context.Agencies.Add(imported);
-                        newCount++;
-                    }
-                    else
-                    {
-                        _logger.LogInformation("Import: Merging configuration details into existing agency domain {AgencyDomain}.", imported.AgencyDomain);
-                        // Update existing config
-                        if (imported.ParserConfig != null)
-                        {
-                            if (existing.ParserConfig == null)
-                            {
-                                imported.ParserConfig.Id = 0;
-                                imported.ParserConfig.AgencyId = existing.Id;
-                                existing.ParserConfig = imported.ParserConfig;
-                            }
-                            else
-                            {
-                                var existingConfigId = existing.ParserConfig.Id;
-                                var existingAgencyId = existing.ParserConfig.AgencyId;
-                                _context.Entry(existing.ParserConfig).CurrentValues.SetValues(imported.ParserConfig);
-                                existing.ParserConfig.Id = existingConfigId;
-                                existing.ParserConfig.AgencyId = existingAgencyId;
-                            }
-                        }
-
-                        // Overwrite listing checks
-                        if (imported.AgencyListingChecks != null)
-                        {
-                            _context.AgencyListingChecks.RemoveRange(existing.AgencyListingChecks);
-                            foreach (var check in imported.AgencyListingChecks)
-                            {
-                                check.Id = 0;
-                                check.AgencyId = existing.Id;
-                                existing.AgencyListingChecks.Add(check);
-                            }
-                        }
-
-                        existing.PaginationSelector = imported.PaginationSelector;
-                        existing.DataSourceType     = imported.DataSourceType;
-                        existing.ApiListingUrl      = imported.ApiListingUrl;
-                        existing.IsSuspended = imported.IsSuspended;
-                        if (!string.IsNullOrEmpty(imported.Notes))
-                        {
-                            existing.Notes = imported.Notes;
-                        }
-
-                        _context.Agencies.Update(existing);
-                        mergedCount++;
-                    }
+                    if (existing == null) { InsertImportedAgency(imported); newCount++; }
+                    else                  { MergeImportedAgency(existing, imported); mergedCount++; }
                 }
+
                 await _context.SaveChangesAsync();
-                
-                var message = "";
-                if (newCount > 0 && mergedCount > 0)
-                {
-                    message = $"Import completed: {newCount} new agencies added, {mergedCount} existing agencies merged.";
-                }
-                else if (newCount > 0)
-                {
-                    message = $"Import completed: {newCount} new agencies added.";
-                }
-                else if (mergedCount > 0)
-                {
-                    message = $"Import completed: {mergedCount} existing agencies merged.";
-                }
-                else
-                {
-                    message = "Import completed, but no changes were made.";
-                }
 
+                var message = BuildImportMessage(newCount, mergedCount);
                 _logger.LogInformation("Import confirmed and completed. {Message}", message);
                 TempData["SuccessMessage"] = message;
             }
@@ -992,6 +896,64 @@ public class AgenciesController : Controller
 
         return RedirectToAction(nameof(Index));
     }
+
+    private void InsertImportedAgency(Agency imported)
+    {
+        _logger.LogInformation("Import: Adding new agency domain {AgencyDomain}.", imported.AgencyDomain);
+        imported.Id = 0;
+        if (imported.ParserConfig != null) imported.ParserConfig.Id = 0;
+        if (imported.AgencyListingChecks != null)
+            foreach (var check in imported.AgencyListingChecks) check.Id = 0;
+        _context.Agencies.Add(imported);
+    }
+
+    private void MergeImportedAgency(Agency existing, Agency imported)
+    {
+        _logger.LogInformation("Import: Merging into existing agency domain {AgencyDomain}.", imported.AgencyDomain);
+
+        if (imported.ParserConfig != null)
+        {
+            if (existing.ParserConfig == null)
+            {
+                imported.ParserConfig.Id = 0;
+                imported.ParserConfig.AgencyId = existing.Id;
+                existing.ParserConfig = imported.ParserConfig;
+            }
+            else
+            {
+                imported.ParserConfig.Id = existing.ParserConfig.Id;
+                imported.ParserConfig.AgencyId = existing.ParserConfig.AgencyId;
+                _context.Entry(existing.ParserConfig).CurrentValues.SetValues(imported.ParserConfig);
+            }
+        }
+
+        if (imported.AgencyListingChecks != null)
+        {
+            _context.AgencyListingChecks.RemoveRange(existing.AgencyListingChecks);
+            foreach (var check in imported.AgencyListingChecks)
+            {
+                check.Id = 0;
+                check.AgencyId = existing.Id;
+                existing.AgencyListingChecks.Add(check);
+            }
+        }
+
+        existing.PaginationSelector = imported.PaginationSelector;
+        existing.DataSourceType     = imported.DataSourceType;
+        existing.ApiListingUrl      = imported.ApiListingUrl;
+        existing.IsSuspended        = imported.IsSuspended;
+        if (!string.IsNullOrEmpty(imported.Notes)) existing.Notes = imported.Notes;
+
+        _context.Agencies.Update(existing);
+    }
+
+    private static string BuildImportMessage(int newCount, int mergedCount) => (newCount, mergedCount) switch
+    {
+        (> 0, > 0) => $"Import completed: {newCount} new agencies added, {mergedCount} existing agencies merged.",
+        (> 0, _)   => $"Import completed: {newCount} new agencies added.",
+        (_, > 0)   => $"Import completed: {mergedCount} existing agencies merged.",
+        _          => "Import completed, but no changes were made."
+    };
 
     // POST: Agencies/RequestCrawl/5
     [HttpPost]

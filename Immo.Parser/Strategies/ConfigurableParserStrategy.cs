@@ -20,7 +20,7 @@ public class ConfigurableParserStrategy : IParserStrategy
         // JSON API pages are handled exclusively by JsonApiParserStrategy
         if (url.StartsWith("json-api://", StringComparison.OrdinalIgnoreCase)) return false;
         var domain = new Uri(url).Host.Replace("www.", "");
-        return _context.ParserConfigs.Any(c => c.Agency.AgencyDomain.Contains(domain));
+        return _context.ParserConfigs.Any(c => c.Agency != null && c.Agency.AgencyDomain.Contains(domain));
     }
 
     public Property Parse(RawPage page, HtmlDocument? document)
@@ -36,10 +36,11 @@ public class ConfigurableParserStrategy : IParserStrategy
             var domain = new Uri(page.Url).Host.Replace("www.", "");
             config = _context.ParserConfigs
                 .Include(c => c.Agency)
-                .FirstOrDefault(c => c.Agency.AgencyDomain.Contains(domain));
+                .FirstOrDefault(c => c.Agency != null && c.Agency.AgencyDomain.Contains(domain));
         }
 
         if (config == null) return null!;
+        if (document == null) return null!;
 
         var title = ExtractString(document, config.TitleSelector);
         var description = ExtractString(document, config.DescriptionSelector);
@@ -145,7 +146,7 @@ public class ConfigurableParserStrategy : IParserStrategy
         if (string.IsNullOrEmpty(imageUrl))
         {
             var ogImage = document.DocumentNode.SelectSingleNode("//meta[@property='og:image']");
-            var ogUrl = ogImage?.GetAttributeValue("content", null);
+            var ogUrl = ogImage?.Attributes["content"]?.Value;
             if (!string.IsNullOrEmpty(ogUrl))
             {
                 imageUrl = HtmlEntity.DeEntitize(ogUrl);
@@ -187,7 +188,7 @@ public class ConfigurableParserStrategy : IParserStrategy
         return new Property
         {
             SourceUrl = page.Url,
-            SourceDomain = config.Agency.AgencyDomain,
+            SourceDomain = config.Agency!.AgencyDomain,
             ExternalId = externalId,
             Title = title,
             Description = description,
@@ -242,9 +243,9 @@ public class ConfigurableParserStrategy : IParserStrategy
         var node = doc.DocumentNode.SelectSingleNode(selector);
         if (node == null) return null;
 
-        var url = node.Name == "meta" 
-            ? node.GetAttributeValue("content", null) 
-            : node.GetAttributeValue("src", null);
+        var url = node.Name == "meta"
+            ? node.Attributes["content"]?.Value
+            : node.Attributes["src"]?.Value;
 
         if (!string.IsNullOrEmpty(url))
         {
